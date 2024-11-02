@@ -1,0 +1,4 @@
+include README.md
+recursive-include LE_scanning/templates *
+recursive-include LE_scanning/translations *
+recursive-include LE_scanning/static *

@@ -1,0 +1,243 @@
+# coding=utf-8
+from __future__ import absolute_import
+
+### (Don't forget to remove me)
+# This is a basic skeleton for your plugin's __init__.py. You probably want to adjust the class name of your plugin
+# as well as the plugin mixins it's subclassing from. This is really just a basic skeleton to get you started,
+# defining your plugin as a template plugin, settings and asset plugin. Feel free to add or remove mixins
+# as necessary.
+#
+# Take a look at the documentation on what other plugin mixins are available.
+
+import octoprint.plugin
+import octoprint.filemanager
+import octoprint.filemanager.util
+import octoprint.util
+import re
+import os
+import math
+import asyncio
+
+class ScanningPlugin(octoprint.plugin.SettingsPlugin,
+    octoprint.plugin.AssetPlugin,
+    octoprint.plugin.StartupPlugin,
+    octoprint.plugin.SimpleApiPlugin,
+    octoprint.plugin.TemplatePlugin
+):
+
+    def __init__(self):
+        self.probing = False
+        self.probed = False
+        self.probe_on = False
+        self.scan_type = None
+        self.direction = 0
+        self.increment = 0
+        self.pull_off = 0
+        self.reference = 0
+        self.length = 0
+        self.continuous = False
+        self.write_stl = False
+        self.probe_data = []
+
+    def initialize(self):
+        self.datafolder = self.get_plugin_data_folder()
+
+    def get_settings_defaults(self):
+        return {
+            # put your plugin's default settings here
+        }
+
+    ##~~ AssetPlugin mixin
+
+    def get_assets(self):
+        # Define your plugin's asset files to automatically include in the
+        # core UI here.
+        return {
+            "js": ["js/scanning.js"],
+            "css": ["css/scanning.css"],
+            "less": ["less/scanning.less"]
+        }
+
+    def get_api_commands(self):
+        return dict(
+            write_gcode=[],
+            editmeta=[]
+        )
+    
+    def start_scan(self):
+        #handle direction here
+        dir = ""
+        if self.direction:
+            dir = "-"
+        if self.scan_type == "X":
+            scan_dir = "Z"
+        if self.scan_type == "Z":
+            scan_dir = "X"
+        if self.scan_type == "A":
+            i = 0
+            probes = round(360/self.increment)
+            while i < probes:
+                self._printer.commands(["G91 G21 G38.2 Z-50 F200", f"G91 G21 Z{self.pull_off} A{dir}{self.increment} F500"])
+                i+=1
+        else:
+            i = 0
+            probes = round(self.scan_length/self.scan_increment)
+            while i < probes:
+                self._printer.commands([f"G91 G21 G38.2 {scan_dir}-100 F200",
+                                        f"G91 G21 {scan_dir}{self.pull_off} F500",
+                                        f"G91 G21 {self.scan_type}{dir}{self.increment} F500"])
+                i+=1
+        
+        self._printer.commands(["SCANDONE"])
+        #write to scan file here?
+
+    def start_continuous_scan(self):
+        dir = ""
+        if self.direction:
+            dir = "-"
+        if self.scan_type == "X":
+            scan_dir = "Z"
+            self.cont_task = asyncio.create_task(self.do_continuous(scan_dir, dir))
+        if self.scan_type == "Z":
+            scan_dir = "X"
+            self.cont_task = asyncio.create_task(self.do_continuous(scan_dir, dir))
+        if self.scan_type == "A":
+            self.cont_task = asyncio.create_task(self.do_continuous_a())
+
+    async def do_continous_a(self):
+        i = 360.0
+        #intial probe
+        self.probed = False
+        self._printer.commands(["G91 G21 G38.2 Z-100 F200","?"])
+        #probe loop
+        while self.probing:            
+            if self.probe_on:
+                self._printer.commands(["G91 Z0.25 F500","?"])
+            if self.probed and not self.probe_on:
+                self.probed = False
+                self._printer.commands(["G91 A0.25 F500","G91 G38.2 Z-5 F200","?"])
+                i-=0.25
+            if i <= 0:
+                self.probing = False
+                self._printer.commands(["G91 Z10 F500","?"])
+            await asyncio.sleep_ms(50)
+        #cancel this task
+        try:
+            self.cont_task.cancel()
+        except:
+            print("Task error")
+
+    async def do_continuous(self, scan_dir, dir):
+        print("async scan in a direction")
+        length = float(self.length)
+        self.probed = False
+        self._printer.commands([f"G91 G21 G38.2 {scan_dir}-100 F200", "?"])
+        #probe loop
+        while self.probing:
+            if self.probe_on:
+                self._printer.commands([f"G91 {scan_dir}0.25 F500","?"])
+            if self.probed and not self.probe_on:
+                self.probed = False
+                self._printer.commands([f"G91 {self.scan_type}{dir}0.25 F500",f"G91 G38.2 {scan_dir}-5 F200","?"])
+                length-=0.25
+            if length <= 0:
+                self.probing = False
+                self._printer.commands(["G91 G21 Z10 F500","?"])
+            await asyncio.sleep_ms(50)
+        #cancel this task
+        try:
+            self.cont_task.cancel()
+        except:
+            print("Task error")
+
+
+    def on_api_command(self, command, data):
+        
+        if command == "start_scan":
+            #print(data)
+            self.scan_type = str(data["scan_type"])
+            self.reference = float(data["reference"])
+            self.pull_off = float(data["pull_off"])
+            self.continuous = bool(data["continuous"])
+            self.direction = bool(data["direction"])
+            self.length = float(data["scan_length"])
+            self.increment = float(data["scan_increment"])
+            if self.length < 20:
+                return
+            self.generate_scan()
+            self.probing = True
+            if self.continuous:
+                self.start_continuous_scan()
+            else:
+                self.start_scan()
+
+    def hook_gcode_received(self, comm_instance, line, *args, **kwargs):
+        # look for a status message
+        if 'Pn' in line:
+            self.probe_on = self.process_pin_state(line)
+        if 'PRB' in line:
+            self.probed = True
+            self.parse_probe()
+        return line
+    
+    def process_pin_state(self, msg):
+        pattern = r"Pn:[^P]*P"
+        return bool(re.search(pattern, msg))
+    
+    def parse_probe(self, line):
+        #[PRB:-1.000,0.000,-10.705,0.000,0.000:1]
+        #0 = X, 1 = Z, 2 = A
+        match = re.search(r".*:([-]*\d*\.*\d*),\d\.000,([-]*\d*\.*\d*),([-]*\d*\.*\d*).*", line)
+        self._logger.debug("Parse probe data")
+        self._logger.debug(line)
+    
+        if match and self.scan_type == 'A':
+            self.probe_data.append(f"{match.groups(1)[1]},{match.groups(1)[2]}")
+        else:
+            self.probe_data.append(f"{match.groups(1)[0]},{match.groups(1)[1]}")
+        #should prevent doing movements until we have the probe data captured
+        #self.probed = False
+
+    ##~~ Softwareupdate hook
+
+    def get_update_information(self):
+        # Define the configuration for your plugin to use with the Software Update
+        # Plugin here. See https://docs.octoprint.org/en/master/bundledplugins/softwareupdate.html
+        # for details.
+        return {
+            "scanning": {
+                "displayName": "Scanning Plugin",
+                "displayVersion": self._plugin_version,
+
+                # version check: github repository
+                "type": "github_release",
+                "user": "paukstelis",
+                "repo": "LE_Scanning",
+                "current": self._plugin_version,
+
+                # update method: pip
+                "pip": "https://github.com/paukstelis/LE_Scanning/archive/{target_version}.zip",
+            }
+        }
+
+
+# If you want your plugin to be registered within OctoPrint under a different name than what you defined in setup.py
+# ("OctoPrint-PluginSkeleton"), you may define that here. Same goes for the other metadata derived from setup.py that
+# can be overwritten via __plugin_xyz__ control properties. See the documentation for that.
+__plugin_name__ = "Scanning"
+
+
+# Set the Python version your plugin is compatible with below. Recommended is Python 3 only for all new plugins.
+# OctoPrint 1.4.0 - 1.7.x run under both Python 3 and the end-of-life Python 2.
+# OctoPrint 1.8.0 onwards only supports Python 3.
+__plugin_pythoncompat__ = ">=3,<4"  # Only Python 3
+
+def __plugin_load__():
+    global __plugin_implementation__
+    __plugin_implementation__ = ScanningPlugin()
+
+    global __plugin_hooks__
+    __plugin_hooks__ = {
+        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
+        "octoprint.comm.protocol.gcode.received": __plugin_implementation__.hook_gcode_received,
+    }

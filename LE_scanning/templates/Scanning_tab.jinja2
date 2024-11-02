@@ -1,0 +1,65 @@
+<!-- scanning_tab.jinja2 -->
+
+<div id="scanning_main" class="row-fluid">
+    <div id="profilePlot" style="width: 100%; height: 500px;"></div>
+        <div style="width: 300px; float: left;">
+            
+            <div class="span8">
+                <label for="scan_type">Scan Type:
+                <select class="span4" id="scan_type" name="scan_type" data-bind="value: scan_type">
+                    <option value="X">X-Scan</option>
+                    <option value="Z">Z-Scan</option>
+                    <option value="A">A-scan</option>
+                </select>
+                </label>
+            </div>
+
+            <div>
+                <label for="reference">Reference distance (mm):</label>
+                <input id="reference" type="number" value="1" step="any" data-bind="value: rference">
+            </div>
+
+            <div>
+                <label for="direction">Direction:</label>
+                <select class="span4" id="direction" name="direction" data-bind="value: direction">
+                    <option value="0">Positive</option>
+                    <option value="1">Negative</option>
+                </select>   
+            </div>
+
+            <div>
+                <label for="length">Scan length (mm):</label>
+                <input id="length" type="number" value="0" step="any" data-bind="value: scan_length">
+            </div>
+
+            <div>
+                <label for="increment">Scan increments (mm/degrees):</label>
+                <input id="increment" type="number" value="1" step="any" data-bind="value: scan_increment">
+            </div>
+            
+            <div>
+                <label for="pull_off">Pull-off distance (mm):</label>
+                <input id="pull_off" type="number" value="3" step="any" data-bind="value: pull_off">
+            </div>
+
+            <div>
+                <label for="continuous">Continuous:
+                <input id="continuous" type="checkbox" unchecked data-bind="checked: continuous">
+                </label>
+            </div>
+
+            <div>
+                <label for="stl">Create STL:
+                <input id="stl" type="checkbox" unchecked data-bind="checked: stl">
+                </label>
+            </div>
+
+        </div>
+
+
+        <div style="padding-left: 10px;">
+                <button id="start_scan_button" class="btn btn-primary" data-bind="click: start_scan">Start Scan</button>
+        </div>
+    </div>
+</div>
+   
