@@ -7,20 +7,18 @@
 $(function() {
     function ScanningViewModel(parameters) {
         var self = this;
-        self.files = parameters[0].listHelper
         self.reference = ko.observable(0);
         self.scan_type = ko.observable(0);
         self.pull_off = ko.observable(0);
-        self.scan_direction = ko.observable(1);
+        self.scan_direction = ko.observable(0);
         self.scan_length = ko.observable(0);
         self.scan_increment = ko.observable(0);
-        self.continuous = ko.observable(0);
-        self.settingsViewModel = parameters[1];
+        self.continuous = ko.observable(false);
+        self.stl = ko.observable(false)
 
 
         self.start_scan = function() {
-            //get file object
-            
+            console.log("Made to start_scan")
             var data = {
                 reference: self.reference(),
                 scan_type: self.scan_type(),
@@ -29,8 +27,9 @@ $(function() {
                 scan_length: self.scan_length(),
                 scan_increment: self.scan_increment(),
                 continuous: self.continuous(),
+                stl: self.stl(),
             };
-
+            console.log(data);
             OctoPrint.simpleApiCommand("scanning", "start_scan", data)
                 .done(function(response) {
                     console.log("Scan started.");

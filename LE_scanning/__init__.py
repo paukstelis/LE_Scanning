@@ -10,13 +10,17 @@ from __future__ import absolute_import
 # Take a look at the documentation on what other plugin mixins are available.
 
 import octoprint.plugin
-import octoprint.filemanager
-import octoprint.filemanager.util
+#import octoprint.filemanager
+#import octoprint.filemanager.util
 import octoprint.util
+from octoprint.filemanager import FileManager
+from octoprint.filemanager.storage import LocalFileStorage
 import re
-import os
-import math
+import time
+#import os
+#import math
 import asyncio
+import logging
 
 class ScanningPlugin(octoprint.plugin.SettingsPlugin,
     octoprint.plugin.AssetPlugin,
@@ -38,9 +42,15 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.continuous = False
         self.write_stl = False
         self.probe_data = []
+        self.scanfile = None
+        self.output_path = None
+        self.loop = None
 
     def initialize(self):
         self.datafolder = self.get_plugin_data_folder()
+        path = self._settings.getBaseFolder("uploads")
+        self._logger.info(f"Path is {path}")
+        self.loop = asyncio.get_event_loop()
 
     def get_settings_defaults(self):
         return {
@@ -63,10 +73,31 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             write_gcode=[],
             editmeta=[]
         )
-    
+    def generate_scan(self):
+        #set all data to begin scan
+        self.scanfile = self.scan_type + "_" + time.strftime("%Y%m%d-%H%M%S") + "_scan.txt"
+        self.probe_data = []
+        #self.probe_data.append(";Starting scan")
+        self.probe_data.append(f";{self.scan_type}")
+        storage = self._file_manager._storage("local")
+        if storage.folder_exists("scans"):
+            self._logger.info("Scans exists")
+        else:
+            storage.add_folder("scans")
+        path = self._settings.getBaseFolder("uploads")
+        self.output_path = f"{path}/scans/{self.scanfile}"
+
+    def finish_scan(self):
+        self.probing = False
+        with open(self.output_path,"w") as newfile:
+            for line in self.probe_data:
+                newfile.write(f"\n{line}")
+
     def start_scan(self):
+        self.probing = True
         #handle direction here
         dir = ""
+        commands = []
         if self.direction:
             dir = "-"
         if self.scan_type == "X":
@@ -77,18 +108,18 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             i = 0
             probes = round(360/self.increment)
             while i < probes:
-                self._printer.commands(["G91 G21 G38.2 Z-50 F200", f"G91 G21 Z{self.pull_off} A{dir}{self.increment} F500"])
+                commands.extend(["G91 G21 G38.2 Z-50 F200", f"G91 G21 G1 Z{self.pull_off} A{dir}{self.increment} F500"])
                 i+=1
         else:
             i = 0
-            probes = round(self.scan_length/self.scan_increment)
+            probes = round(self.length/self.increment)
             while i < probes:
-                self._printer.commands([f"G91 G21 G38.2 {scan_dir}-100 F200",
-                                        f"G91 G21 {scan_dir}{self.pull_off} F500",
-                                        f"G91 G21 {self.scan_type}{dir}{self.increment} F500"])
+                commands.extend([f"G91 G21 G38.3 {scan_dir}-100 F200",
+                                 f"G91 G21 G1 {scan_dir}{self.pull_off} F500",
+                                 f"G91 G21 G1 {self.scan_type}{dir}{self.increment} F500"])                                 
                 i+=1
-        
-        self._printer.commands(["SCANDONE"])
+        commands.append("SCANDONE")
+        self._printer.commands(commands)
         #write to scan file here?
 
     def start_continuous_scan(self):
@@ -97,10 +128,10 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             dir = "-"
         if self.scan_type == "X":
             scan_dir = "Z"
-            self.cont_task = asyncio.create_task(self.do_continuous(scan_dir, dir))
+            self.cont_task = self.loop.create_task(self.do_continuous(scan_dir, dir))
         if self.scan_type == "Z":
             scan_dir = "X"
-            self.cont_task = asyncio.create_task(self.do_continuous(scan_dir, dir))
+            self.cont_task = self.loop.create_task(self.do_continuous(scan_dir, dir))
         if self.scan_type == "A":
             self.cont_task = asyncio.create_task(self.do_continuous_a())
 
@@ -112,10 +143,10 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         #probe loop
         while self.probing:            
             if self.probe_on:
-                self._printer.commands(["G91 Z0.25 F500","?"])
+                self._printer.commands(["G91 G21 G38.5 Z10 F200","?"])
             if self.probed and not self.probe_on:
                 self.probed = False
-                self._printer.commands(["G91 A0.25 F500","G91 G38.2 Z-5 F200","?"])
+                self._printer.commands(["G91 G1 A0.25 F500","G91 G38.2 Z-5 F200","?"])
                 i-=0.25
             if i <= 0:
                 self.probing = False
@@ -125,46 +156,58 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         try:
             self.cont_task.cancel()
         except:
-            print("Task error")
+            self._logger.info("Task error")
 
     async def do_continuous(self, scan_dir, dir):
-        print("async scan in a direction")
         length = float(self.length)
         self.probed = False
-        self._printer.commands([f"G91 G21 G38.2 {scan_dir}-100 F200", "?"])
+        self.first_probe = True
+        self._printer.commands([f"G91 G21 G38.2 {scan_dir}-100 F200"])
+        self.probe_on = True
         #probe loop
         while self.probing:
-            if self.probe_on:
-                self._printer.commands([f"G91 {scan_dir}0.25 F500","?"])
-            if self.probed and not self.probe_on:
-                self.probed = False
-                self._printer.commands([f"G91 {self.scan_type}{dir}0.25 F500",f"G91 G38.2 {scan_dir}-5 F200","?"])
+            if self.probed:
+                self.first_probe = False
+                self._printer.commands([f"G91 G21 G38.5 {self.scan_type}{dir}10 {scan_dir}10 F200"])
+            if not self.probed:
+                self._printer.commands([f"G91 G21 G1 {self.scan_type}{dir}0.25 F500","?",f"G91 G38.2 {scan_dir}-5 F200","?"])
                 length-=0.25
             if length <= 0:
                 self.probing = False
-                self._printer.commands(["G91 G21 Z10 F500","?"])
+                self._printer.commands([f"G91 G21 G1 {scan_dir}10 F500","?"])
             await asyncio.sleep_ms(50)
         #cancel this task
         try:
             self.cont_task.cancel()
+            self.finish_scan()
         except:
             print("Task error")
+        
 
-
+    def get_api_commands(self):
+        return dict(
+            start_scan=[]
+        )
+    
     def on_api_command(self, command, data):
         
         if command == "start_scan":
-            #print(data)
+            self._logger.info(data)
             self.scan_type = str(data["scan_type"])
             self.reference = float(data["reference"])
             self.pull_off = float(data["pull_off"])
             self.continuous = bool(data["continuous"])
-            self.direction = bool(data["direction"])
+            self.direction = int(data["scan_direction"])
             self.length = float(data["scan_length"])
             self.increment = float(data["scan_increment"])
-            if self.length < 20:
-                return
+            self.stl = bool(data["stl"])
             self.generate_scan()
+            if not self._printer.is_operational() or self._printer.is_printing():
+                self._logger.info("Cannot do probing")
+                return
+            if self.length < 10:
+                return
+            
             self.probing = True
             if self.continuous:
                 self.start_continuous_scan()
@@ -176,10 +219,19 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         if 'Pn' in line:
             self.probe_on = self.process_pin_state(line)
         if 'PRB' in line:
-            self.probed = True
-            self.parse_probe()
+            #toggle
+            self.probed = not self.probed
+            if self.probed:
+                self.parse_probe(line)
+        
         return line
     
+    def hook_gcode_sending(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
+        if cmd.upper() == 'SCANDONE':
+            self.probing = False
+            self.finish_scan()
+            return (None, )
+
     def process_pin_state(self, msg):
         pattern = r"Pn:[^P]*P"
         return bool(re.search(pattern, msg))
@@ -188,15 +240,13 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         #[PRB:-1.000,0.000,-10.705,0.000,0.000:1]
         #0 = X, 1 = Z, 2 = A
         match = re.search(r".*:([-]*\d*\.*\d*),\d\.000,([-]*\d*\.*\d*),([-]*\d*\.*\d*).*", line)
-        self._logger.debug("Parse probe data")
-        self._logger.debug(line)
+        self._logger.info("Parse probe data")
+        self._logger.info(line)
     
         if match and self.scan_type == 'A':
             self.probe_data.append(f"{match.groups(1)[1]},{match.groups(1)[2]}")
         else:
             self.probe_data.append(f"{match.groups(1)[0]},{match.groups(1)[1]}")
-        #should prevent doing movements until we have the probe data captured
-        #self.probed = False
 
     ##~~ Softwareupdate hook
 
@@ -240,4 +290,5 @@ def __plugin_load__():
     __plugin_hooks__ = {
         "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
         "octoprint.comm.protocol.gcode.received": __plugin_implementation__.hook_gcode_received,
+        "octoprint.comm.protocol.gcode.sending": __plugin_implementation__.hook_gcode_sending,
     }
