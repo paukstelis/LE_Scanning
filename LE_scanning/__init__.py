@@ -21,6 +21,7 @@ import time
 #import math
 import asyncio
 import logging
+from STLGenerator import STLGenerator
 
 class ScanningPlugin(octoprint.plugin.SettingsPlugin,
     octoprint.plugin.AssetPlugin,
