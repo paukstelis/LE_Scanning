@@ -14,11 +14,12 @@ $(function() {
         self.scan_length = ko.observable(0);
         self.scan_increment = ko.observable(0);
         self.continuous = ko.observable(false);
-        self.stl = ko.observable(false)
-
+        self.stl = ko.observable(false);
+        self.xValues = [];
+        self.zValues = [];
+        self.aValues = [];
 
         self.start_scan = function() {
-            console.log("Made to start_scan")
             var data = {
                 reference: self.reference(),
                 scan_type: self.scan_type(),
@@ -33,22 +34,57 @@ $(function() {
             OctoPrint.simpleApiCommand("scanning", "start_scan", data)
                 .done(function(response) {
                     console.log("Scan started.");
+                    $("#plotarea").show();
                 })
                 .fail(function() {
                     console.error("Failed to start scan");
                 });
-        };
+        
+            };
+        
+            function plotProfile() {
+                var trace = {
+                    x: self.xValues,
+                    y: self.zValues,
+                    mode: 'lines',
+                    name: 'Scan Profile',
+                    line: {
+                        color: 'blue',
+                        width: 2
+                    }
+                };
+    
+                var layout = {
+                    title: 'Scan',
+                    xaxis: { 
+                        title: 'X',
+                        scaleanchor: 'y',  // Ensure equal scaling
+                        scaleratio: 1
+                    },
+                    yaxis: { 
+                        title: 'Z Axis',
+                        scaleanchor: 'x',  // Equal scaling with X axis
+                        scaleratio: 1,
+                        autorange: 'reversed'  // Invert Z-axis
+                    },
+                    annotations: self.annotations,  // Include any annotations (tags)
+                    showlegend: false
+                };
+    
+                //Make a plot
+                Plotly.newPlot('plotarea',[trace], layout);
+    
+            }
+        
+        self.onDataUpdaterPluginMessage = function(plugin, data) {
+            if (plugin == 'scanning' && data.type == 'graph') {
+                
+            }
+        }
     }
-
-    /* view model class, parameters for constructor, container to bind to
-     * Please see http://docs.octoprint.org/en/master/plugins/viewmodels.html#registering-custom-viewmodels for more details
-     * and a full list of the available options.
-     */
     OCTOPRINT_VIEWMODELS.push({
         construct: ScanningViewModel,
-        // ViewModels your plugin depends on, e.g. loginStateViewModel, settingsViewModel, ...
         dependencies: [ /* "loginStateViewModel", "settingsViewModel" */ ],
-        // Elements to bind to, e.g. #settings_plugin_scanning, #tab_plugin_scanning, ...
         elements: [ "#tab_plugin_scanning" ]
     });
 });

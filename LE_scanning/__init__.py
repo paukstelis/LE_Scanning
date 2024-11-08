@@ -21,7 +21,7 @@ import time
 #import math
 import asyncio
 import logging
-from STLGenerator import STLGenerator
+#from STLGenerator import STLGenerator
 
 class ScanningPlugin(octoprint.plugin.SettingsPlugin,
     octoprint.plugin.AssetPlugin,
@@ -46,6 +46,8 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.scanfile = None
         self.output_path = None
         self.loop = None
+        self._identifier = "scanning"
+        self.stop_flag = False
 
     def initialize(self):
         self.datafolder = self.get_plugin_data_folder()
@@ -64,7 +66,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         # Define your plugin's asset files to automatically include in the
         # core UI here.
         return {
-            "js": ["js/scanning.js"],
+            "js": ["js/scanning.js", "js/plotly-latest.min.js"],
             "css": ["css/scanning.css"],
             "less": ["less/scanning.less"]
         }
@@ -92,7 +94,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.probing = False
         with open(self.output_path,"w") as newfile:
             for line in self.probe_data:
-                newfile.write(f"\n{line}")
+                newfile.write(f"{line}\n")
 
     def start_scan(self):
         self.probing = True
@@ -232,6 +234,10 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             self.probing = False
             self.finish_scan()
             return (None, )
+    
+    def update_probe_data(self):
+        data = dict(type="graph", probe=self.probe_data)
+        self._plugin_manager.send_plugin_message(self._identifier,data)
 
     def process_pin_state(self, msg):
         pattern = r"Pn:[^P]*P"
@@ -244,10 +250,11 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self._logger.info("Parse probe data")
         self._logger.info(line)
     
-        if match and self.scan_type == 'A':
+        if self.scan_type == 'A':
             self.probe_data.append(f"{match.groups(1)[1]},{match.groups(1)[2]}")
         else:
             self.probe_data.append(f"{match.groups(1)[0]},{match.groups(1)[1]}")
+            self.update_probe_data()
 
     ##~~ Softwareupdate hook
 

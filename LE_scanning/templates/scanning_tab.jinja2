@@ -1,9 +1,12 @@
 <!-- scanning_tab.jinja2 -->
 
 <div id="scanning_main" class="row-fluid">
+    <div id="plotarea" style="width: 100%; height: 500px; display:none;">
+    </div>
     <div id="scanning_sub" style="width: 100%; height: 500px;">  
             <div>
                 <label for="scan_type">Scan Type:
+                <br>
                 <select id="scan_type" name="scan_type" data-bind="value: scan_type">
                     <option value="X">X-Scan</option>
                     <option value="Z">Z-Scan</option>
@@ -12,18 +15,16 @@
                 </label>
             </div>
             <div>
-                <label for="reference">Reference distance (mm):</label>
-                <input id="reference" type="number" value="1" step="any" data-bind="value: reference">
-            </div>
-
-            <div>
                 <label for="direction">Direction:</label>
                 <select class="span4" id="direction" name="direction" data-bind="value: scan_direction">
                     <option value="0">Positive</option>
                     <option value="1">Negative</option>
                 </select>   
             </div>
-
+            <div>
+                <label for="reference">Reference distance (mm):</label>
+                <input id="reference" type="number" value="1" step="any" data-bind="value: reference">
+            </div>
             <div>
                 <label for="length">Scan length (mm):</label>
                 <input id="length" type="number" value="60" step="any" data-bind="value: scan_length">
