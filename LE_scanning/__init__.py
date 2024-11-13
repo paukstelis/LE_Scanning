@@ -38,11 +38,13 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.direction = 0
         self.increment = 0
         self.pull_off = 0
-        self.reference = 0
+        self.ref_diam = 0
         self.length = 0
         self.continuous = False
-        self.write_stl = False
+        self.stl = False
+        self.name = None
         self.probe_data = []
+        self.reference = None
         self.scanfile = None
         self.output_path = None
         self.loop = None
@@ -78,10 +80,12 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         )
     def generate_scan(self):
         #set all data to begin scan
-        self.scanfile = self.scan_type + "_" + time.strftime("%Y%m%d-%H%M%S") + "_scan.txt"
+        if not self.name:    
+            self.scanfile = self.scan_type + "_" + time.strftime("%Y%m%d-%H%M") + "_scan.txt"
+        else:
+            self.scanfile = self.scan_type + "_" + self.name + "_scan.txt"
         self.probe_data = []
-        #self.probe_data.append(";Starting scan")
-        self.probe_data.append(f";{self.scan_type}")
+        self.reference = None
         storage = self._file_manager._storage("local")
         if storage.folder_exists("scans"):
             self._logger.info("Scans exists")
@@ -93,11 +97,13 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
     def finish_scan(self):
         self.probing = False
         with open(self.output_path,"w") as newfile:
+            newfile.write(f";{self.scan_type}\n")
             for line in self.probe_data:
-                newfile.write(f"{line}\n")
+                newfile.write(f"{line[0]:.3f},{line[1]:.3f}\n")
 
     def start_scan(self):
         self.probing = True
+        self.reference = None
         #handle direction here
         dir = ""
         commands = []
@@ -197,13 +203,17 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         if command == "start_scan":
             self._logger.info(data)
             self.scan_type = str(data["scan_type"])
-            self.reference = float(data["reference"])
+            self.ref_diam = float(data["reference"])
             self.pull_off = float(data["pull_off"])
             self.continuous = bool(data["continuous"])
             self.direction = int(data["scan_direction"])
             self.length = float(data["scan_length"])
             self.increment = float(data["scan_increment"])
             self.stl = bool(data["stl"])
+            self.name = str(data["name"])
+            if self.name == "None":
+                self.name = None
+
             self.generate_scan()
             if not self._printer.is_operational() or self._printer.is_printing():
                 self._logger.info("Cannot do probing")
@@ -218,15 +228,8 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
                 self.start_scan()
 
     def hook_gcode_received(self, comm_instance, line, *args, **kwargs):
-        # look for a status message
-        if 'Pn' in line:
-            self.probe_on = self.process_pin_state(line)
         if 'PRB' in line:
-            #toggle
-            self.probed = not self.probed
-            if self.probed:
-                self.parse_probe(line)
-        
+            self.parse_probe(line)
         return line
     
     def hook_gcode_sending(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
@@ -237,7 +240,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
     
     def update_probe_data(self):
         data = dict(type="graph", probe=self.probe_data)
-        self._plugin_manager.send_plugin_message(self._identifier,data)
+        self._plugin_manager.send_plugin_message('scanning',data)
 
     def process_pin_state(self, msg):
         pattern = r"Pn:[^P]*P"
@@ -251,9 +254,25 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self._logger.info(line)
     
         if self.scan_type == 'A':
-            self.probe_data.append(f"{match.groups(1)[1]},{match.groups(1)[2]}")
+            z = float(f"{match.groups(1)[1]}")
+            a = float(f"{match.groups(1)[2]}")
+            if not self.reference:
+                self.reference = (z,a)
+                self.probe_data.append((0,0))
+            else:
+                self.probe_data.append((z-self.reference[0],a-self.reference[1]))
+                self._logger.info(self.probe_data)
+            self.update_probe_data()
+        #X or Z scan
         else:
-            self.probe_data.append(f"{match.groups(1)[0]},{match.groups(1)[1]}")
+            x = float(f"{match.groups(1)[0]}")
+            z = float(f"{match.groups(1)[1]}")
+            if not self.reference:
+                self.reference = (x,z)
+                self.probe_data.append((0,0))
+            else:
+                self.probe_data.append((x-self.reference[0],z-self.reference[1]))
+                self._logger.info(self.probe_data)
             self.update_probe_data()
 
     ##~~ Softwareupdate hook
