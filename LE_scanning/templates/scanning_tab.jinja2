@@ -23,27 +23,34 @@
             </div>
             <div>
                 <label for="reference">Reference distance (mm):</label>
-                <input id="reference" type="number" value="1" step="any" data-bind="value: ref_diam">
+                <input id="reference" type="number" value="1" min="5" step="any" data-bind="value: ref_diam">
             </div>
             <div>
                 <label for="length">Scan length (mm):</label>
-                <input id="length" type="number" value="60" step="any" data-bind="value: scan_length">
+                <input id="length" type="number" value="60" min="2" step="any" data-bind="value: scan_length">
             </div>
 
             <div>
                 <label for="increment">Scan increments (mm/degrees):</label>
-                <input id="increment" type="number" value="1" step="any" data-bind="value: scan_increment">
+                <input id="increment" type="number" value="1" min="0.5" step="any" data-bind="value: scan_increment">
             </div>
             
             <div>
                 <label for="pull_off">Pull-off distance (mm):</label>
-                <input id="pull_off" type="number" value="3" step="any" data-bind="value: pull_off">
+                <input id="pull_off" type="number" value="3" min="0.2" step="any" data-bind="value: pull_off">
             </div>
 
             <div>
+                <label for="pull_off">Scan Name (blank for date/time):</label>
+                <input id="pull_off" type="text" value="0" data-bind="value: name">
+            </div>
+
+            <div>
+            <!--
                 <label for="continuous">Continuous:
                 <input id="continuous" type="checkbox" unchecked data-bind="checked: continuous">
                 </label>
+            -->    
             </div>
 
             <div>

@@ -22,7 +22,18 @@ $(function() {
 
         self.start_scan = function() {
             //Need to do some sanity checks here:
+            var error = false;
+            if (self.scan_increment > self.scan_length) {
+                error = "Scan increment greater than length!";
+            }
+            if (self.slt && (self.ref_diam < 5 )) {
+                error = "Reference diameter must be greater than 5mm";
+            }
 
+            if (self.pull_off < 0) {
+                error = "Pull-off value must be greater than 0";
+            }
+            
             var data = {
                 ref_diam: self.ref_diam(),
                 scan_type: self.scan_type(),
@@ -34,21 +45,24 @@ $(function() {
                 stl: self.stl(),
                 name: self.name(),
             };
-            //console.log(data);
-            OctoPrint.simpleApiCommand("scanning", "start_scan", data)
-                .done(function(response) {
-                    console.log("Scan started.");
-                    $("#plotarea").show();
-                    if (self.scan_type() === 'A') {
-                        self.createPolarPlot();
-                    }
-                    else {
-                        self.createPlot();
-                    }
-                })
-                .fail(function() {
-                    console.error("Failed to start scan");
-                });
+            
+            if (error === false) {
+                OctoPrint.simpleApiCommand("scanning", "start_scan", data)
+                    .done(function(response) {
+                        console.log("Scan started.");
+                        $("#plotarea").show();
+                        if (self.scan_type() === 'A') {
+                            self.createPolarPlot();
+                        }
+                        else {
+                            self.createPlot();
+                        }
+                    })
+                    .fail(function() {
+                        console.error("Failed to start scan");
+                    });
+            }
+            else { alert(error); }
         
             };
         

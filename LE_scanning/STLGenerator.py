@@ -3,7 +3,7 @@ from stl import mesh
 import math
 
 class STLGenerator:
-    def __init__(self, coords, start_diameter, num_segments=36):
+    def __init__(self, coords, start_diameter, num_segments=96):
         """
         Initialize the STLGenerator with coordinates, starting diameter, and number of segments.
         
@@ -23,11 +23,13 @@ class STLGenerator:
     def _zero_coordinates(self):
         """Zero the X and Z coordinates based on the first coordinate."""
         x0, z0 = self.coords[0]
-        self.coords[:, 0] -= x0
-        self.coords[:, 1] -= z0
+        self.coords[:, 0] -= x0  # Adjust X values
+        self.coords[:, 1] -= z0  # Adjust Z values to zero
 
-        # Set the initial radius based on the starting diameter
-        self.coords[0, 1] = self.start_diameter / 2
+        # Adjust the Z values (radii) to reflect the starting diameter
+        initial_radius = self.start_diameter / 2
+        radius_offset = initial_radius - self.coords[0, 1]
+        self.coords[:, 1] += radius_offset  # Directly adjust radii by adding the offset
 
     def generate_mesh(self):
         """Generate vertices and faces for the STL mesh."""
@@ -66,4 +68,4 @@ class STLGenerator:
 
         # Write to STL file
         stl_mesh.save(output_file)
-        print(f"STL file saved as {output_file}")
+        #print(f"STL file saved as {output_file}")

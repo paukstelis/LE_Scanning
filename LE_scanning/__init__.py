@@ -21,7 +21,7 @@ import time
 #import math
 import asyncio
 import logging
-#from STLGenerator import STLGenerator
+from . import STLGenerator as STLGenerator
 
 class ScanningPlugin(octoprint.plugin.SettingsPlugin,
     octoprint.plugin.AssetPlugin,
@@ -46,6 +46,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.probe_data = []
         self.reference = None
         self.scanfile = None
+        self.stlfile = None
         self.output_path = None
         self.loop = None
         self._identifier = "scanning"
@@ -82,8 +83,10 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         #set all data to begin scan
         if not self.name:    
             self.scanfile = self.scan_type + "_" + time.strftime("%Y%m%d-%H%M") + "_scan.txt"
+            self.stlfile = self.scan_type + "_" + time.strftime("%Y%m%d-%H%M") + "_scan.stl"
         else:
             self.scanfile = self.scan_type + "_" + self.name + "_scan.txt"
+            self.stlfile = self.scan_type + "_" + self.name + "_scan.stl"
         self.probe_data = []
         self.reference = None
         storage = self._file_manager._storage("local")
@@ -100,6 +103,12 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             newfile.write(f";{self.scan_type}\n")
             for line in self.probe_data:
                 newfile.write(f"{line[0]:.3f},{line[1]:.3f}\n")
+        if self.stl:
+            path = self._settings.getBaseFolder("uploads")
+            tosavepath =  f"{path}/scans/{self.stlfile}"
+            stlgen = STLGenerator.STLGenerator(self.probe_data, self.ref_diam)
+            stlgen.generate_mesh()
+            stlgen.save_stl(tosavepath)
 
     def start_scan(self):
         self.probing = True
@@ -203,7 +212,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         if command == "start_scan":
             self._logger.info(data)
             self.scan_type = str(data["scan_type"])
-            self.ref_diam = float(data["reference"])
+            self.ref_diam = float(data["ref_diam"])
             self.pull_off = float(data["pull_off"])
             self.continuous = bool(data["continuous"])
             self.direction = int(data["scan_direction"])
