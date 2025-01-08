@@ -101,6 +101,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.probing = False
         with open(self.output_path,"w") as newfile:
             newfile.write(f";{self.scan_type}\n")
+            newfile.write(f";D={self.ref_diam}\n")
             for line in self.probe_data:
                 newfile.write(f"{line[0]:.3f},{line[1]:.3f}\n")
         if self.stl:
