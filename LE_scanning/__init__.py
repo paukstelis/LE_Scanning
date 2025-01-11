@@ -133,7 +133,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             i = 0
             probes = round(self.length/self.increment)
             while i < probes:
-                commands.extend([f"G91 G21 G38.3 {scan_dir}-100 F200",
+                commands.extend([f"G91 G21 F150 G38.3 {scan_dir}-100 ",
                                  f"G91 G21 G1 {scan_dir}{self.pull_off} F500",
                                  f"G91 G21 G1 {self.scan_type}{dir}{self.increment} F500"])                                 
                 i+=1
@@ -187,9 +187,9 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         while self.probing:
             if self.probed:
                 self.first_probe = False
-                self._printer.commands([f"G91 G21 G38.5 {self.scan_type}{dir}10 {scan_dir}10 F200"])
+                self._printer.commands([f"G91 G21 G38.5 {self.scan_type}{dir}10 {scan_dir}10 F50"])
             if not self.probed:
-                self._printer.commands([f"G91 G21 G1 {self.scan_type}{dir}0.25 F500","?",f"G91 G38.2 {scan_dir}-5 F200","?"])
+                self._printer.commands([f"G91 G21 G1 {self.scan_type}{dir}0.25 F500","?",f"G91 G38.2 {scan_dir}-5 F50","?"])
                 length-=0.25
             if length <= 0:
                 self.probing = False
