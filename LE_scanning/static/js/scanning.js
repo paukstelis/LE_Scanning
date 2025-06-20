@@ -16,6 +16,7 @@ $(function() {
         self.continuous = ko.observable(false);
         self.stl = ko.observable(false);
         self.name = ko.observable(null);
+        self.dooval = ko.observable(0);
         self.xValues = [];
         self.zValues = [];
         self.aValues = [];
@@ -44,6 +45,7 @@ $(function() {
                 continuous: self.continuous(),
                 stl: self.stl(),
                 name: self.name(),
+                dooval: self.dooval(),
             };
             
             if (error === false) {

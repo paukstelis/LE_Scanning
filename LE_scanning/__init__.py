@@ -51,6 +51,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.loop = None
         self._identifier = "scanning"
         self.stop_flag = False
+        self.dooval = 0
 
     def initialize(self):
         self.datafolder = self.get_plugin_data_folder()
@@ -116,13 +117,19 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.reference = None
         #handle direction here
         dir = ""
+        retract_dir = ""
         commands = []
-        if self.direction:
-            dir = "-"
+        #TODO Z scan Retract direction depends on front or back side scan and this is not yet taken into account
         if self.scan_type == "X":
             scan_dir = "Z"
+            if self.direction:
+                dir = "-"
         if self.scan_type == "Z":
             scan_dir = "X"
+            dir = "-"
+            if not self.direction:
+                dir=""
+                retract_dir = "-"
         if self.scan_type == "A":
             i = 0
             probes = round(360/self.increment)
@@ -133,8 +140,8 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             i = 0
             probes = round(self.length/self.increment)
             while i <= probes:
-                commands.extend([f"G91 G21 F150 G38.3 {scan_dir}-100 ",
-                                 f"G91 G21 G1 {scan_dir}{self.pull_off} F500",
+                commands.extend([f"G91 G21 F150 G38.3 {scan_dir}{dir}100 ",
+                                 f"G91 G21 G1 {scan_dir}{retract_dir}{self.pull_off} F500",
                                  f"G91 G21 G1 {self.scan_type}{dir}{self.increment} F500"])                                 
                 i+=1
         commands.append("SCANDONE")
@@ -221,6 +228,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             self.increment = float(data["scan_increment"])
             self.stl = bool(data["stl"])
             self.name = str(data["name"])
+            self.dooval = int(data["dooval"])
             if self.name == "None":
                 self.name = None
 
