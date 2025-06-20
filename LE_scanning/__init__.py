@@ -114,15 +114,28 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
     def start_scan(self):
         self.probing = True
         self.reference = None
-        #handle direction here
-        dir = ""
+        #handle directions here
+        #self.direction == 0 is positive, 1 is negative
+        dir = "" #this is equivalent to PROBE direction
+        retract_dir = "" #only necessary for Z
+        move_dir = "" #the movement direction between probes, should be nothing for X positive,
         commands = []
-        if self.direction:
-            dir = "-"
+        #TODO Z scan Retract direction depends on front or back side scan and this is not yet taken into account
         if self.scan_type == "X":
             scan_dir = "Z"
+            dir = '-'
+            if self.direction:
+                move_dir = "-"
+                
         if self.scan_type == "Z":
             scan_dir = "X"
+            dir = "-"
+            if not self.direction:
+                dir=""
+                retract_dir = "-"
+            if self.direction:
+                move_dir = "-"
+                
         if self.scan_type == "A":
             i = 0
             probes = round(360/self.increment)
@@ -133,9 +146,9 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             i = 0
             probes = round(self.length/self.increment)
             while i <= probes:
-                commands.extend([f"G91 G21 F150 G38.3 {scan_dir}-100 ",
-                                 f"G91 G21 G1 {scan_dir}{self.pull_off} F500",
-                                 f"G91 G21 G1 {self.scan_type}{dir}{self.increment} F500"])                                 
+                commands.extend([f"G91 G21 F150 G38.3 {scan_dir}{dir}100 ",
+                                 f"G91 G21 G1 {scan_dir}{retract_dir}{self.pull_off} F500",
+                                 f"G91 G21 G1 {self.scan_type}{move_dir}{self.increment} F500"])                                 
                 i+=1
         commands.append("SCANDONE")
         self._printer.commands(commands)
