@@ -53,6 +53,8 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.stop_flag = False
         self.dooval = 0
 
+        self.commands = []
+
     def initialize(self):
         self.datafolder = self.get_plugin_data_folder()
         path = self._settings.getBaseFolder("uploads")
@@ -126,9 +128,9 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         dir = "" #this is equivalent to PROBE direction
         retract_dir = "" #only necessary for Z
         move_dir = "" #the movement direction between probes, should be nothing for X positive,
-        commands = []
+        self.commands = []
         #Set A to zero as the first command
-        commands.append("G92 A0")
+        self.commands.append("G92 A0")
         #TODO Z scan Retract direction depends on front or back side scan and this is not yet taken into account
         if self.scan_type == "X":
             scan_dir = "Z"
@@ -151,7 +153,6 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             if self.direction:
                 move_dir = "-"
                 
-
         i = 0
         probes = round(self.length/self.increment)
         probe_commands = []
@@ -175,12 +176,35 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             probe_commands.append(f"G91 G21 G0 A{arot}")
             probe_commands = probe_commands * self.dooval
 
-        commands.extend(probe_commands)                            
-        commands.append("SCANDONE")
+        self.commands.extend(probe_commands)                            
+        self.commands.append("SCANDONE")
 
+        self.send_next_probe()
         #prompt to begin running commands somehow?
-        self._printer.commands(commands)
+        #self._printer.commands(commands)
         #write to scan file here?
+
+    def send_next_probe(self):
+        sent_probe = False
+        if self.probing:
+            while not sent_probe:
+                if "G38.3" in self.commands[0]:
+                    sent_probe = True
+                    self._printer.commands(self.commands[0])
+                    self.commands.pop(0)
+                    break
+                self._printer.commands(self.commands[0])
+                try:
+                    self.commands.pop(0)
+                except:
+                    #may have to put scan done stuff inhere?
+                    self._logger.info("Command list complete")
+
+    def cancel_probe(self):
+        self.probing = False
+        #soft reset
+        self.commands = []
+        self._printer.commands(["M999"])
 
     def start_continuous_scan(self):
         dir = ""
@@ -298,6 +322,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             self.probe_data.append((x-self.reference[0],z-self.reference[1],a))
             self._logger.info(self.probe_data)
         self.update_probe_data()
+        self.send_next_probe()
 
     ##~~ Softwareupdate hook
 
