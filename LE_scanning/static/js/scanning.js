@@ -17,6 +17,7 @@ $(function() {
         self.stl = ko.observable(false);
         self.name = ko.observable(null);
         self.dooval = ko.observable(0);
+        self.scanning = ko.observable(false);
         self.xValues = [];
         self.zValues = [];
         self.aValues = [];
@@ -70,12 +71,17 @@ $(function() {
                 dooval: self.dooval(),
             };
             
+            if (self.dooval()) {
+                alert("Ovality scans require a known A-axis zero point. Mark the first scan point on your work piece!")
+            }
+
             if (error === false) {
                 OctoPrint.simpleApiCommand("scanning", "start_scan", data)
                     .done(function(response) {
                         console.log("Scan started.");
                         $("#plotarea").show();
                         self.createPlot();
+                        self.scanning(true);
                     })
                     .fail(function() {
                         console.error("Failed to start scan");
@@ -85,38 +91,76 @@ $(function() {
         
             };
         
-        self.createPlot  = function() {
-                var trace = {
-                    x: self.xValues,
-                    y: self.zValues,
+        self.stop_scan = function() {
+            OctoPrint.simpleApiCommand("scanning", "stop_scan")
+                .done(function(response) {
+                    console.log("Scan stopped.");
+                    self.scanning(false);
+                })
+                .fail(function() {
+                    console.error("Failed to stop scan");
+                });
+        };
+
+        self.createPlot  = function(probeData) {
+            // Split probeData into segments on "NEXTSEGMENT", ignore lines starting with ';'
+            let segments = [];
+            let currentSegment = [];
+            for (let i = 0; i < probeData.length; i++) {
+                const point = probeData[i];
+                // Ignore comments
+                if (typeof point === "string" && point.startsWith(";")) {
+                    continue;
+                }
+                if (point === "NEXTSEGMENT") {
+                    if (currentSegment.length > 0) {
+                        segments.push(currentSegment);
+                        currentSegment = [];
+                    }
+                } else {
+                    currentSegment.push(point);
+                }
+            }
+            // Push the last segment if it has points
+            if (currentSegment.length > 0) {
+                segments.push(currentSegment);
+            }
+
+            // Build traces for each segment with different colors
+            let traces = [];
+            for (let i = 0; i < segments.length; i++) {
+                let seg = segments[i];
+                let x = seg.map(point => point[0]);
+                let y = seg.map(point => point[1]);
+                traces.push({
+                    x: x,
+                    y: y,
                     mode: 'lines',
                     name: 'Scan Profile',
                     line: {
-                        color: 'blue',
+                        color: colors[i % colors.length],
                         width: 2
                     }
-                };
-    
-                var layout = {
-                    title: self.scan_type() + '-axis Scan',
-                    xaxis: { 
-                        title: 'X',
-                        scaleanchor: 'y',  // Ensure equal scaling
-                        scaleratio: 1
-                    },
-                    yaxis: { 
-                        title: 'Z',
-                        scaleanchor: 'x',  // Equal scaling with X axis
-                        scaleratio: 1,
-                        autorange: 'reversed'  // Invert Z-axis
-                    },
-                    //annotations: self.annotations,  // Include any annotations (tags)
-                    showlegend: false
-                };
-    
-                //Make a plot
-                Plotly.newPlot('plotarea',[trace], layout);
-    
+                });
+            }
+
+            var layout = {
+                title: self.scan_type() + '-axis Scan',
+                xaxis: { 
+                    title: 'X',
+                    scaleanchor: 'y',
+                    scaleratio: 1
+                },
+                yaxis: { 
+                    title: 'Z',
+                    scaleanchor: 'x',
+                    scaleratio: 1,
+                    autorange: 'reversed'
+                },
+                showlegend: false
+            };
+
+            Plotly.newPlot('plotarea', traces, layout);
         };
 
        
@@ -130,11 +174,7 @@ $(function() {
         
         self.onDataUpdaterPluginMessage = function(plugin, data) {
             if (plugin == 'scanning' && data.type == 'graph') {
-
-                self.xValues = data.probe.map(point => point[0]);
-                self.zValues = data.probe.map(point => point[1]);
-                self.createPlot();
-                
+                self.createPlot(data.probe);
             }
         }
     }

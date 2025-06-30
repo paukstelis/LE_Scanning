@@ -131,6 +131,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.commands = []
         #Set A to zero as the first command
         self.commands.append("G92 A0")
+        self.commands.append("G92 X0 Z0")
         #TODO Z scan Retract direction depends on front or back side scan and this is not yet taken into account
         if self.scan_type == "X":
             scan_dir = "Z"
@@ -165,20 +166,16 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             probe_commands.append("NEXTSEGMENT")
             arot = 360 / self.dooval
             #Move back to first probe position
-            if self.scan_type == "X":
-                moveto = self.reference
-            elif self.scan_type == "Z":
-                moveto = (self.reference[1], self.reference[0])
             #this still doesn't handle front/back side scans for Z
-            probe_commands.append[f"G90 G0 {scan_dir}{moveto[1]+10}"]
-            probe_commands.append[f"G90 G0 {move_dir[0]}"]
+            probe_commands.append(f"G90 G0 {scan_dir}5")
+            probe_commands.append(f"G90 G0 {self.scan_type}0")
             #Rotate A
             probe_commands.append(f"G91 G21 G0 A{arot}")
             probe_commands = probe_commands * self.dooval
 
         self.commands.extend(probe_commands)                            
         self.commands.append("SCANDONE")
-
+        self._logger.info(self.commands)
         self.send_next_probe()
         #prompt to begin running commands somehow?
         #self._printer.commands(commands)
@@ -186,13 +183,15 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
 
     def send_next_probe(self):
         sent_probe = False
-        if self.probing:
+        if self.probing and len(self.commands) > 0:
             while not sent_probe:
                 if "G38.3" in self.commands[0]:
                     sent_probe = True
                     self._printer.commands(self.commands[0])
                     self.commands.pop(0)
                     break
+                if "NEXTSEGMENT" in self.commands[0]:
+                    self.probe_data.append("NEXTSEGMENT")
                 self._printer.commands(self.commands[0])
                 try:
                     self.commands.pop(0)
@@ -206,46 +205,10 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.commands = []
         self._printer.commands(["M999"])
 
-    def start_continuous_scan(self):
-        dir = ""
-        if self.direction:
-            dir = "-"
-        if self.scan_type == "X":
-            scan_dir = "Z"
-            self.cont_task = self.loop.create_task(self.do_continuous(scan_dir, dir))
-        if self.scan_type == "Z":
-            scan_dir = "X"
-            self.cont_task = self.loop.create_task(self.do_continuous(scan_dir, dir))
-
-    async def do_continuous(self, scan_dir, dir):
-        length = float(self.length)
-        self.probed = False
-        self.first_probe = True
-        self._printer.commands([f"G91 G21 G38.2 {scan_dir}-100 F200"])
-        self.probe_on = True
-        #probe loop
-        while self.probing:
-            if self.probed:
-                self.first_probe = False
-                self._printer.commands([f"G91 G21 G38.5 {self.scan_type}{dir}10 {scan_dir}10 F50"])
-            if not self.probed:
-                self._printer.commands([f"G91 G21 G1 {self.scan_type}{dir}0.25 F500","?",f"G91 G38.2 {scan_dir}-5 F50","?"])
-                length-=0.25
-            if length <= 0:
-                self.probing = False
-                self._printer.commands([f"G91 G21 G1 {scan_dir}10 F500","?"])
-            await asyncio.sleep_ms(50)
-        #cancel this task
-        try:
-            self.cont_task.cancel()
-            self.finish_scan()
-        except:
-            print("Task error")
-        
-
     def get_api_commands(self):
         return dict(
-            start_scan=[]
+            start_scan=[],
+            stop_scan=[]
         )
     
     def on_api_command(self, command, data):
@@ -284,6 +247,13 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             else:
                 self.start_scan()
 
+        if command == "stop_scan":
+            if self.probing:
+                self._logger.info("Stopping scan")
+                self.cancel_probe()
+            else:
+                self._logger.info("Not probing, nothing to stop")
+
     def hook_gcode_received(self, comm_instance, line, *args, **kwargs):
         if 'PRB' in line:
             self.parse_probe(line)
@@ -295,6 +265,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             self.finish_scan()
             return (None, )
         if cmd.upper() == 'NEXTSEGMENT':
+            self._logger.info("Next segment received")
             self.probe_data.append("NEXTSEGMENT")
             return (None, )
 
@@ -316,10 +287,10 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         z = float(f"{match.groups(1)[1]}")
         a = float(f"{match.groups(1)[2]}")
         if not self.reference:
-            self.reference = (x,z)
-            self.probe_data.append((0,0,a))
+            self.reference = (x,z,a)
+            self.probe_data.append((0,0,0))
         else:
-            self.probe_data.append((x-self.reference[0],z-self.reference[1],a))
+            self.probe_data.append((x-self.reference[0],z-self.reference[1],a-self.reference[2]))
             self._logger.info(self.probe_data)
         self.update_probe_data()
         self.send_next_probe()
