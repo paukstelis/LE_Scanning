@@ -151,35 +151,29 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             if self.direction:
                 move_dir = "-"
                 
-        if self.scan_type == "A":
-            i = 0
-            probes = round(360/self.increment)
-            while i <= probes:
-                commands.extend(["G91 G21 G38.2 Z-50 F200", f"G91 G21 G1 Z{self.pull_off} A{dir}{self.increment} F500"])
-                i+=1
-        else:
-            i = 0
-            probes = round(self.length/self.increment)
-            probe_commands = []
-            while i <= probes:
-                probe_commands.extend([f"G91 G21 F150 G38.3 {scan_dir}{dir}100 ",
-                                 f"G91 G21 G1 {scan_dir}{retract_dir}{self.pull_off} F500",
-                                 f"G91 G21 G1 {self.scan_type}{move_dir}{self.increment} F500"])                                 
-                i+=1
-            if self.dooval:
-                probe_commands.append("NEXTSEGMENT")
-                arot = 360 / self.dooval
-                #Move back to first probe position
-                if self.scan_type == "X":
-                    moveto = self.reference
-                elif self.scan_type == "Z":
-                    moveto = (self.reference[1], self.reference[0])
-                #this still doesn't handle front/back side scans for Z
-                probe_commands.append[f"G90 G0 {scan_dir}{moveto[1]+10}"]
-                probe_commands.append[f"G90 G0 {move_dir[0]}"]
-                #Rotate A
-                probe_commands.append(f"G91 G21 G0 A{arot}")
-                probe_commands = probe_commands * self.dooval
+
+        i = 0
+        probes = round(self.length/self.increment)
+        probe_commands = []
+        while i <= probes:
+            probe_commands.extend([f"G91 G21 F150 G38.3 {scan_dir}{dir}100 ",
+                            f"G91 G21 G1 {scan_dir}{retract_dir}{self.pull_off} F500",
+                            f"G91 G21 G1 {self.scan_type}{move_dir}{self.increment} F500"])                                 
+            i+=1
+        if self.dooval:
+            probe_commands.append("NEXTSEGMENT")
+            arot = 360 / self.dooval
+            #Move back to first probe position
+            if self.scan_type == "X":
+                moveto = self.reference
+            elif self.scan_type == "Z":
+                moveto = (self.reference[1], self.reference[0])
+            #this still doesn't handle front/back side scans for Z
+            probe_commands.append[f"G90 G0 {scan_dir}{moveto[1]+10}"]
+            probe_commands.append[f"G90 G0 {move_dir[0]}"]
+            #Rotate A
+            probe_commands.append(f"G91 G21 G0 A{arot}")
+            probe_commands = probe_commands * self.dooval
 
         commands.extend(probe_commands)                            
         commands.append("SCANDONE")
@@ -198,31 +192,6 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         if self.scan_type == "Z":
             scan_dir = "X"
             self.cont_task = self.loop.create_task(self.do_continuous(scan_dir, dir))
-        if self.scan_type == "A":
-            self.cont_task = asyncio.create_task(self.do_continuous_a())
-
-    async def do_continous_a(self):
-        i = 360.0
-        #intial probe
-        self.probed = False
-        self._printer.commands(["G91 G21 G38.2 Z-100 F200","?"])
-        #probe loop
-        while self.probing:            
-            if self.probe_on:
-                self._printer.commands(["G91 G21 G38.5 Z10 F200","?"])
-            if self.probed and not self.probe_on:
-                self.probed = False
-                self._printer.commands(["G91 G1 A0.25 F500","G91 G38.2 Z-5 F200","?"])
-                i-=0.25
-            if i <= 0:
-                self.probing = False
-                self._printer.commands(["G91 Z10 F500","?"])
-            await asyncio.sleep_ms(50)
-        #cancel this task
-        try:
-            self.cont_task.cancel()
-        except:
-            self._logger.info("Task error")
 
     async def do_continuous(self, scan_dir, dir):
         length = float(self.length)
@@ -258,7 +227,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
     def on_api_command(self, command, data):
         
         if command == "start_scan":
-            self._logger.info(data)
+            #self._logger.info(data)
             self.scan_type = str(data["scan_type"])
             self.ref_diam = float(data["ref_diam"])
             self.pull_off = float(data["pull_off"])
@@ -305,7 +274,6 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             self.probe_data.append("NEXTSEGMENT")
             return (None, )
 
-    
     def update_probe_data(self):
         data = dict(type="graph", probe=self.probe_data)
         self._plugin_manager.send_plugin_message('scanning',data)
@@ -320,29 +288,16 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         match = re.search(r".*:([-]*\d*\.*\d*),\d\.000,([-]*\d*\.*\d*),([-]*\d*\.*\d*).*", line)
         self._logger.info("Parse probe data")
         self._logger.info(line)
-    
-        if self.scan_type == 'A':
-            z = float(f"{match.groups(1)[1]}")
-            a = float(f"{match.groups(1)[2]}")
-            if not self.reference:
-                self.reference = (z,a)
-                self.probe_data.append((0,0))
-            else:
-                self.probe_data.append((z-self.reference[0],a-self.reference[1]))
-                self._logger.info(self.probe_data)
-            self.update_probe_data()
-        #X or Z scan
+        x = float(f"{match.groups(1)[0]}")
+        z = float(f"{match.groups(1)[1]}")
+        a = float(f"{match.groups(1)[2]}")
+        if not self.reference:
+            self.reference = (x,z)
+            self.probe_data.append((0,0,a))
         else:
-            x = float(f"{match.groups(1)[0]}")
-            z = float(f"{match.groups(1)[1]}")
-            a = float(f"{match.groups(1)[2]}")
-            if not self.reference:
-                self.reference = (x,z)
-                self.probe_data.append((0,0))
-            else:
-                self.probe_data.append((x-self.reference[0],z-self.reference[1],a))
-                self._logger.info(self.probe_data)
-            self.update_probe_data()
+            self.probe_data.append((x-self.reference[0],z-self.reference[1],a))
+            self._logger.info(self.probe_data)
+        self.update_probe_data()
 
     ##~~ Softwareupdate hook
 

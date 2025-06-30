@@ -75,12 +75,7 @@ $(function() {
                     .done(function(response) {
                         console.log("Scan started.");
                         $("#plotarea").show();
-                        if (self.scan_type() === 'A') {
-                            self.createPolarPlot();
-                        }
-                        else {
-                            self.createPlot();
-                        }
+                        self.createPlot();
                     })
                     .fail(function() {
                         console.error("Failed to start scan");
@@ -124,35 +119,7 @@ $(function() {
     
         };
 
-        self.createPolarPlot  = function() {
-            var trace = {
-                r: self.xValues,
-                theta: self.zValues,
-                mode: 'lines',
-                name: 'Scan Profile',
-                type: 'scatterpolar',
-                line: {
-                    color: 'blue',
-                    width: 2
-                }
-
-            };
-
-            var layout = {
-                title: 'A-axis Scan',
-                polar: {
-                    radialaxis: {
-                      visible: true,
-                      autorange: true,
-                    }
-                }
-            };
-
-            //Make a plot
-            Plotly.newPlot('plotarea',[trace], layout);
-
-        };
-        
+       
         self.updatePlot = function() {
             Plotly.react('plotarea', [{
                 x: self.xValues,
@@ -163,20 +130,11 @@ $(function() {
         
         self.onDataUpdaterPluginMessage = function(plugin, data) {
             if (plugin == 'scanning' && data.type == 'graph') {
-                console.log(data);
-                //self.updatePlot();
-                //need to revisit how to update properly, as it seems to not do 'reversed' when using restyle
-                if (self.scan_type() === 'A') {
-                    self.xValues = data.probe.map(point => (self.ref_diam()/2) + point[0]);
-                    self.zValues = data.probe.map(point => point[1]);
-                    self.createPolarPlot();
-                }
-                else {
-                    self.xValues = data.probe.map(point => point[0]);
-                    self.zValues = data.probe.map(point => point[1]);
-                    self.createPlot();
-                }
 
+                self.xValues = data.probe.map(point => point[0]);
+                self.zValues = data.probe.map(point => point[1]);
+                self.createPlot();
+                
             }
         }
     }
