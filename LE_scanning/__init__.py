@@ -104,7 +104,10 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             newfile.write(f";{self.scan_type}\n")
             newfile.write(f";D={self.ref_diam}\n")
             for line in self.probe_data:
-                newfile.write(f"{line[0]:.3f},{line[1]:.3f}\n")
+                if line == "NEXTSEGMENT":
+                    newfile.write("NEXTSEGMENT\n")
+                else:
+                    newfile.write(f"{line[0]:.3f},{line[1]:.3f},{line[2]:.3f}\n")
         if self.stl:
             path = self._settings.getBaseFolder("uploads")
             tosavepath =  f"{path}/scans/{self.stlfile}"
@@ -118,18 +121,36 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         #handle direction here
         dir = ""
         retract_dir = ""
+        #handle directions here
+        #self.direction == 0 is positive, 1 is negative
+        dir = "" #this is equivalent to PROBE direction
+        retract_dir = "" #only necessary for Z
+        move_dir = "" #the movement direction between probes, should be nothing for X positive,
         commands = []
+        #Set A to zero as the first command
+        commands.append("G92 A0")
         #TODO Z scan Retract direction depends on front or back side scan and this is not yet taken into account
         if self.scan_type == "X":
             scan_dir = "Z"
             if self.direction:
                 dir = "-"
+            dir = '-'
+            if self.direction:
+                move_dir = "-"
+                
         if self.scan_type == "Z":
             scan_dir = "X"
             dir = "-"
             if not self.direction:
                 dir=""
                 retract_dir = "-"
+            dir = "-"
+            if not self.direction:
+                dir=""
+                retract_dir = "-"
+            if self.direction:
+                move_dir = "-"
+                
         if self.scan_type == "A":
             i = 0
             probes = round(360/self.increment)
@@ -139,12 +160,31 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         else:
             i = 0
             probes = round(self.length/self.increment)
+            probe_commands = []
             while i <= probes:
-                commands.extend([f"G91 G21 F150 G38.3 {scan_dir}{dir}100 ",
+                probe_commands.extend([f"G91 G21 F150 G38.3 {scan_dir}{dir}100 ",
                                  f"G91 G21 G1 {scan_dir}{retract_dir}{self.pull_off} F500",
-                                 f"G91 G21 G1 {self.scan_type}{dir}{self.increment} F500"])                                 
+                                 f"G91 G21 G1 {self.scan_type}{move_dir}{self.increment} F500"])                                 
                 i+=1
+            if self.dooval:
+                probe_commands.append("NEXTSEGMENT")
+                arot = 360 / self.dooval
+                #Move back to first probe position
+                if self.scan_type == "X":
+                    moveto = self.reference
+                elif self.scan_type == "Z":
+                    moveto = (self.reference[1], self.reference[0])
+                #this still doesn't handle front/back side scans for Z
+                probe_commands.append[f"G90 G0 {scan_dir}{moveto[1]+10}"]
+                probe_commands.append[f"G90 G0 {move_dir[0]}"]
+                #Rotate A
+                probe_commands.append(f"G91 G21 G0 A{arot}")
+                probe_commands = probe_commands * self.dooval
+
+        commands.extend(probe_commands)                            
         commands.append("SCANDONE")
+
+        #prompt to begin running commands somehow?
         self._printer.commands(commands)
         #write to scan file here?
 
@@ -237,6 +277,12 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
                 self._logger.info("Cannot do probing")
                 return
             if self.length < 10:
+                self._plugin_manager.send_plugin_dmessage("latheengraver", dict(type="simple_notify",
+                                                                    title="Length error",
+                                                                    text="Scan lengths must be greater than 10mm",
+                                                                    hide=True,
+                                                                    delay=10000,
+                                                                    notify_type="error"))
                 return
             
             self.probing = True
@@ -255,6 +301,10 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             self.probing = False
             self.finish_scan()
             return (None, )
+        if cmd.upper() == 'NEXTSEGMENT':
+            self.probe_data.append("NEXTSEGMENT")
+            return (None, )
+
     
     def update_probe_data(self):
         data = dict(type="graph", probe=self.probe_data)
@@ -285,11 +335,12 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         else:
             x = float(f"{match.groups(1)[0]}")
             z = float(f"{match.groups(1)[1]}")
+            a = float(f"{match.groups(1)[2]}")
             if not self.reference:
                 self.reference = (x,z)
                 self.probe_data.append((0,0))
             else:
-                self.probe_data.append((x-self.reference[0],z-self.reference[1]))
+                self.probe_data.append((x-self.reference[0],z-self.reference[1],a))
                 self._logger.info(self.probe_data)
             self.update_probe_data()
 

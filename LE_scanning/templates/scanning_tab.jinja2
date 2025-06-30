@@ -22,12 +22,12 @@
                 </select>   
             </div>
             <div>
-                <label for="reference">Reference distance (mm):</label>
+                <label for="reference">Reference diameter (mm):</label>
                 <input id="reference" type="number" value="1" min="5" step="any" data-bind="value: ref_diam">
             </div>
             <div>
                 <label for="length">Scan length (mm):</label>
-                <input id="length" type="number" value="60" min="2" step="any" data-bind="value: scan_length">
+                <input id="length" type="number" value="60" min="10" step="any" data-bind="value: scan_length">
             </div>
 
             <div>
@@ -46,15 +46,8 @@
             </div>
 
             <div>
-                <label for="dooval">Ovality scanning increments:
-                <input id="dooval" type="number" value="0" min="0" max="10" data-bind="value: dooval">
-                </label>
-
-            <!--
-                <label for="continuous">Continuous:
-                <input id="continuous" type="checkbox" unchecked data-bind="checked: continuous">
-                </label>
-            -->    
+                <label for="dooval">Ovality scanning increments:</label>
+                <input id="dooval" type="number" value="0" min="0" max="20" data-bind="value: dooval"> 
             </div>
 
             <div>
@@ -62,6 +55,9 @@
                 <input id="stl" type="checkbox" unchecked data-bind="checked: stl">
                 </label>
             </div>
+        </div>
+        <hr>
+        <div class="row">
             <div style="padding-left: 10px;">
             <button id="start_scan_button" class="btn btn-primary" data-bind="click: start_scan">Start Scan</button>
             </div>
