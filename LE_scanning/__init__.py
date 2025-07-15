@@ -183,8 +183,8 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
 
     def send_next_probe(self):
         sent_probe = False
-        if self.probing and len(self.commands) > 0:
-            while not sent_probe:
+        if self.probing:
+            while not sent_probe and len(self.commands) > 0:
                 if "G38.3" in self.commands[0]:
                     sent_probe = True
                     self._printer.commands(self.commands[0])
@@ -210,6 +210,9 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             start_scan=[],
             stop_scan=[]
         )
+    
+    def is_api_protected(self):
+        return True
     
     def on_api_command(self, command, data):
         
