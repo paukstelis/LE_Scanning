@@ -129,6 +129,8 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         retract_dir = "" #only necessary for Z
         move_dir = "" #the movement direction between probes, should be nothing for X positive,
         self.commands = []
+        #Make sure in G94 mode
+        self.commands.append("G94")
         #Set A to zero as the first command
         self.commands.append("G92 A0")
         self.commands.append("G92 X0 Z0")
@@ -158,9 +160,9 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         probes = round(self.length/self.increment)
         probe_commands = []
         while i <= probes:
-            probe_commands.extend([f"G91 G21 F150 G38.3 {scan_dir}{dir}100 ",
-                            f"G91 G21 G1 {scan_dir}{retract_dir}{self.pull_off} F500",
-                            f"G91 G21 G1 {self.scan_type}{move_dir}{self.increment} F500"])                                 
+            probe_commands.extend([f"G91 G21 G38.3 {scan_dir}{dir}100 F150",
+                            f"G91 G21 G0 {scan_dir}{retract_dir}{self.pull_off} F500",
+                            f"G91 G21 G0 {self.scan_type}{move_dir}{self.increment} F500"])                                 
             i+=1
         if self.dooval:
             probe_commands.append("NEXTSEGMENT")
