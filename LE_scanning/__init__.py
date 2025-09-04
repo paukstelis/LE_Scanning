@@ -128,6 +128,8 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             stlgen = STLGenerator.STLGenerator(self.probe_data, self.ref_diam)
             stlgen.generate_mesh()
             stlgen.save_stl(tosavepath)
+        
+        self.probe_data = []
 
     def start_scan(self):
         self.probing = True
@@ -232,6 +234,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         #soft reset
         self.commands = []
         self._printer.commands(["M999"])
+        self.probe_data = []
 
     def get_api_commands(self):
         return dict(
@@ -246,6 +249,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         
         if command == "start_scan":
             #self._logger.info(data)
+            self.probe_data = []
             self.scan_type = str(data["scan_type"])
             self.ref_diam = float(data["ref_diam"])
             self.pull_off = float(data["pull_off"])
