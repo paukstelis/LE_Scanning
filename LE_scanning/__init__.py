@@ -134,14 +134,11 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
     def start_scan(self):
         self.probing = True
         self.reference = None
+
         #handle direction here
         dir = ""
         retract_dir = ""
-        #handle directions here
-        #self.direction == 0 is positive, 1 is negative
-        dir = "" #this is equivalent to PROBE direction
-        retract_dir = "" #only necessary for Z
-        move_dir = "" #the movement direction between probes, should be nothing for X positive,
+
         self.commands = []
         #Make sure in G94 mode
         self.commands.append("G94")
@@ -191,6 +188,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.send_next_probe()
         #prompt to begin running commands somehow?
         #self._printer.commands(commands)
+
         #write to scan file here?
 
     def send_next_probe(self):
