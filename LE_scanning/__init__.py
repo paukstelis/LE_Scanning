@@ -17,9 +17,6 @@ from octoprint.filemanager import FileManager
 from octoprint.filemanager.storage import LocalFileStorage
 import re
 import time
-#import os
-#import math
-import asyncio
 import logging
 from . import STLGenerator as STLGenerator
 
@@ -27,6 +24,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
     octoprint.plugin.AssetPlugin,
     octoprint.plugin.StartupPlugin,
     octoprint.plugin.SimpleApiPlugin,
+    octoprint.plugin.EventHandlerPlugin,
     octoprint.plugin.TemplatePlugin
 ):
 
@@ -51,19 +49,36 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.loop = None
         self._identifier = "scanning"
         self.stop_flag = False
+        self.dooval = 0
+
+        self.current_x = None
+        self.current_z = None
+        self.current_a = None
+        self.current_b = None
+
+        self.commands = []
 
     def initialize(self):
         self.datafolder = self.get_plugin_data_folder()
+        self._event_bus.subscribe("LATHEENGRAVER_SEND_POSITION", self.get_position)
         path = self._settings.getBaseFolder("uploads")
         self._logger.info(f"Path is {path}")
-        self.loop = asyncio.get_event_loop()
 
     def get_settings_defaults(self):
         return {
             # put your plugin's default settings here
         }
 
-    ##~~ AssetPlugin mixin
+    def on_event(self, event, payload):
+        if event == "plugin_latheengraver_send_position":
+            self.get_position(event, payload)
+
+    def get_position(self, event, payload):
+        #self._logger.info(payload)
+        self.current_x = payload["x"]
+        self.current_z = payload["z"]
+        self.current_a = payload["a"]
+        self.current_b = payload["b"]
 
     def get_assets(self):
         # Define your plugin's asset files to automatically include in the
@@ -103,26 +118,38 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             newfile.write(f";{self.scan_type}\n")
             newfile.write(f";D={self.ref_diam}\n")
             for line in self.probe_data:
-                newfile.write(f"{line[0]:.3f},{line[1]:.3f}\n")
+                if line == "NEXTSEGMENT":
+                    newfile.write("NEXTSEGMENT\n")
+                else:
+                    newfile.write(f"{line[0]:.3f},{line[1]:.3f},{line[2]:.3f}\n")
         if self.stl:
             path = self._settings.getBaseFolder("uploads")
             tosavepath =  f"{path}/scans/{self.stlfile}"
             stlgen = STLGenerator.STLGenerator(self.probe_data, self.ref_diam)
             stlgen.generate_mesh()
             stlgen.save_stl(tosavepath)
+        
+        self.probe_data = []
 
     def start_scan(self):
         self.probing = True
         self.reference = None
-        #handle directions here
-        #self.direction == 0 is positive, 1 is negative
-        dir = "" #this is equivalent to PROBE direction
-        retract_dir = "" #only necessary for Z
-        move_dir = "" #the movement direction between probes, should be nothing for X positive,
-        commands = []
+
+        #handle direction here
+        dir = ""
+        retract_dir = ""
+
+        self.commands = []
+        #Make sure in G94 mode
+        self.commands.append("G94")
+        #Set A to zero as the first command
+        self.commands.append("G92 A0")
+        self.commands.append("G92 X0 Z0")
         #TODO Z scan Retract direction depends on front or back side scan and this is not yet taken into account
         if self.scan_type == "X":
             scan_dir = "Z"
+            if self.direction:
+                dir = "-"
             dir = '-'
             if self.direction:
                 move_dir = "-"
@@ -133,98 +160,94 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             if not self.direction:
                 dir=""
                 retract_dir = "-"
+            dir = "-"
+            if not self.direction:
+                dir=""
+                retract_dir = "-"
             if self.direction:
                 move_dir = "-"
                 
-        if self.scan_type == "A":
-            i = 0
-            probes = round(360/self.increment)
-            while i <= probes:
-                commands.extend(["G91 G21 G38.2 Z-50 F200", f"G91 G21 G1 Z{self.pull_off} A{dir}{self.increment} F500"])
-                i+=1
-        else:
-            i = 0
-            probes = round(self.length/self.increment)
-            while i <= probes:
-                commands.extend([f"G91 G21 F150 G38.3 {scan_dir}{dir}100 ",
-                                 f"G91 G21 G1 {scan_dir}{retract_dir}{self.pull_off} F500",
-                                 f"G91 G21 G1 {self.scan_type}{move_dir}{self.increment} F500"])                                 
-                i+=1
-        commands.append("SCANDONE")
-        self._printer.commands(commands)
+        i = 0
+        probes = round(self.length/self.increment)
+        probe_commands = []
+        while i <= probes:
+            probe_commands.extend([f"G91 G21 G38.3 {scan_dir}{dir}100 F150",
+                            f"G91 G21 G0 {scan_dir}{retract_dir}{self.pull_off} F500",
+                            f"G91 G21 G0 {self.scan_type}{move_dir}{self.increment} F500"])                                 
+            i+=1
+        if self.dooval:
+            probe_commands.append("NEXTSEGMENT")
+            arot = 360 / self.dooval
+            #Rotate A
+            probe_commands.append(f"G91 G21 G0 A{arot}")
+            probe_commands = probe_commands * self.dooval
+
+        self.commands.extend(probe_commands)                            
+        self.commands.append("SCANDONE")
+        self._logger.info(self.commands)
+        self.send_next_probe()
+        #prompt to begin running commands somehow?
+        #self._printer.commands(commands)
+
         #write to scan file here?
 
-    def start_continuous_scan(self):
-        dir = ""
-        if self.direction:
-            dir = "-"
-        if self.scan_type == "X":
-            scan_dir = "Z"
-            self.cont_task = self.loop.create_task(self.do_continuous(scan_dir, dir))
-        if self.scan_type == "Z":
-            scan_dir = "X"
-            self.cont_task = self.loop.create_task(self.do_continuous(scan_dir, dir))
-        if self.scan_type == "A":
-            self.cont_task = asyncio.create_task(self.do_continuous_a())
+    def send_next_probe(self):
+        sent_probe = False
+        if self.probing:
+            while not sent_probe and len(self.commands) > 0:
+                if "G38.3" in self.commands[0]:
+                    sent_probe = True
+                    self._printer.commands(self.commands[0])
+                    self.commands.pop(0)
+                    break
+                if "NEXTSEGMENT" in self.commands[0]:
+                    self.probe_data.append("NEXTSEGMENT")
 
-    async def do_continous_a(self):
-        i = 360.0
-        #intial probe
-        self.probed = False
-        self._printer.commands(["G91 G21 G38.2 Z-100 F200","?"])
-        #probe loop
-        while self.probing:            
-            if self.probe_on:
-                self._printer.commands(["G91 G21 G38.5 Z10 F200","?"])
-            if self.probed and not self.probe_on:
-                self.probed = False
-                self._printer.commands(["G91 G1 A0.25 F500","G91 G38.2 Z-5 F200","?"])
-                i-=0.25
-            if i <= 0:
-                self.probing = False
-                self._printer.commands(["G91 Z10 F500","?"])
-            await asyncio.sleep_ms(50)
-        #cancel this task
-        try:
-            self.cont_task.cancel()
-        except:
-            self._logger.info("Task error")
+                    time.sleep(0.5)
+                    #Reset position HERE
+                    #Move back to first probe position, need to be careful here!
+                    #this still doesn't handle front/back side scans for Z
+                    reset_commands = []
+                    if self.scan_type == "Z":
+                        if self.current_x < 0:
+                            #less than 0 point, so retract back
+                            reset_commands.append(f"G90 G0 X0")
+                            reset_commands.append(f"G90 G0 Z0")
+                        else:
+                            reset_commands.append(f"G90 G0 Z0")
+                    if self.scan_type == "X":
+                        reset_commands.append(f"G90 G0 Z0")
+                        reset_commands.append(f"G90 G0 X0")
+                    self.commands[1:1] = reset_commands
 
-    async def do_continuous(self, scan_dir, dir):
-        length = float(self.length)
-        self.probed = False
-        self.first_probe = True
-        self._printer.commands([f"G91 G21 G38.2 {scan_dir}-100 F200"])
-        self.probe_on = True
-        #probe loop
-        while self.probing:
-            if self.probed:
-                self.first_probe = False
-                self._printer.commands([f"G91 G21 G38.5 {self.scan_type}{dir}10 {scan_dir}10 F50"])
-            if not self.probed:
-                self._printer.commands([f"G91 G21 G1 {self.scan_type}{dir}0.25 F500","?",f"G91 G38.2 {scan_dir}-5 F50","?"])
-                length-=0.25
-            if length <= 0:
-                self.probing = False
-                self._printer.commands([f"G91 G21 G1 {scan_dir}10 F500","?"])
-            await asyncio.sleep_ms(50)
-        #cancel this task
-        try:
-            self.cont_task.cancel()
-            self.finish_scan()
-        except:
-            print("Task error")
-        
+                self._printer.commands(self.commands[0])
+                try:
+                    self.commands.pop(0)
+                except:
+                    #may have to put scan done stuff inhere?
+                    self._logger.info("Command list complete")
+
+    def cancel_probe(self):
+        self.probing = False
+        #soft reset
+        self.commands = []
+        self._printer.commands(["M999"])
+        self.probe_data = []
 
     def get_api_commands(self):
         return dict(
-            start_scan=[]
+            start_scan=[],
+            stop_scan=[]
         )
+    
+    def is_api_protected(self):
+        return True
     
     def on_api_command(self, command, data):
         
         if command == "start_scan":
-            self._logger.info(data)
+            #self._logger.info(data)
+            self.probe_data = []
             self.scan_type = str(data["scan_type"])
             self.ref_diam = float(data["ref_diam"])
             self.pull_off = float(data["pull_off"])
@@ -234,6 +257,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             self.increment = float(data["scan_increment"])
             self.stl = bool(data["stl"])
             self.name = str(data["name"])
+            self.dooval = int(data["dooval"])
             if self.name == "None":
                 self.name = None
 
@@ -242,13 +266,24 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
                 self._logger.info("Cannot do probing")
                 return
             if self.length < 10:
+                self._plugin_manager.send_plugin_dmessage("latheengraver", dict(type="simple_notify",
+                                                                    title="Length error",
+                                                                    text="Scan lengths must be greater than 10mm",
+                                                                    hide=True,
+                                                                    delay=10000,
+                                                                    notify_type="error"))
                 return
             
             self.probing = True
-            if self.continuous:
-                self.start_continuous_scan()
+
+            self.start_scan()
+
+        if command == "stop_scan":
+            if self.probing:
+                self._logger.info("Stopping scan")
+                self.cancel_probe()
             else:
-                self.start_scan()
+                self._logger.info("Not probing, nothing to stop")
 
     def hook_gcode_received(self, comm_instance, line, *args, **kwargs):
         if 'PRB' in line:
@@ -260,7 +295,11 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             self.probing = False
             self.finish_scan()
             return (None, )
-    
+        if cmd.upper() == 'NEXTSEGMENT':
+            self._logger.info("Next segment received")
+            self.probe_data.append("NEXTSEGMENT")
+            return (None, )
+
     def update_probe_data(self):
         data = dict(type="graph", probe=self.probe_data)
         self._plugin_manager.send_plugin_message('scanning',data)
@@ -275,28 +314,17 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         match = re.search(r".*:([-]*\d*\.*\d*),\d\.000,([-]*\d*\.*\d*),([-]*\d*\.*\d*).*", line)
         self._logger.info("Parse probe data")
         self._logger.info(line)
-    
-        if self.scan_type == 'A':
-            z = float(f"{match.groups(1)[1]}")
-            a = float(f"{match.groups(1)[2]}")
-            if not self.reference:
-                self.reference = (z,a)
-                self.probe_data.append((0,0))
-            else:
-                self.probe_data.append((z-self.reference[0],a-self.reference[1]))
-                self._logger.info(self.probe_data)
-            self.update_probe_data()
-        #X or Z scan
+        x = float(f"{match.groups(1)[0]}")
+        z = float(f"{match.groups(1)[1]}")
+        a = float(f"{match.groups(1)[2]}")
+        if not self.reference:
+            self.reference = (x,z,a)
+            self.probe_data.append((0,0,0))
         else:
-            x = float(f"{match.groups(1)[0]}")
-            z = float(f"{match.groups(1)[1]}")
-            if not self.reference:
-                self.reference = (x,z)
-                self.probe_data.append((0,0))
-            else:
-                self.probe_data.append((x-self.reference[0],z-self.reference[1]))
-                self._logger.info(self.probe_data)
-            self.update_probe_data()
+            self.probe_data.append((x-self.reference[0],z-self.reference[1],a-self.reference[2]))
+            self._logger.info(self.probe_data)
+        self.update_probe_data()
+        self.send_next_probe()
 
     ##~~ Softwareupdate hook
 

@@ -10,7 +10,6 @@
                 <select id="scan_type" name="scan_type" data-bind="value: scan_type">
                     <option value="X">X-Scan</option>
                     <option value="Z">Z-Scan</option>
-                    <option value="A">A-scan</option>
                 </select>
                 </label>
             </div>
@@ -22,16 +21,16 @@
                 </select>   
             </div>
             <div>
-                <label for="reference">Reference distance (mm):</label>
+                <label for="reference">Reference diameter (mm):</label>
                 <input id="reference" type="number" value="1" min="5" step="any" data-bind="value: ref_diam">
             </div>
             <div>
                 <label for="length">Scan length (mm):</label>
-                <input id="length" type="number" value="60" min="2" step="any" data-bind="value: scan_length">
+                <input id="length" type="number" value="60" min="10" step="any" data-bind="value: scan_length">
             </div>
 
             <div>
-                <label for="increment">Scan increments (mm/degrees):</label>
+                <label for="increment">Scan increments (mm):</label>
                 <input id="increment" type="number" value="1" min="0.5" step="any" data-bind="value: scan_increment">
             </div>
             
@@ -46,11 +45,8 @@
             </div>
 
             <div>
-            <!--
-                <label for="continuous">Continuous:
-                <input id="continuous" type="checkbox" unchecked data-bind="checked: continuous">
-                </label>
-            -->    
+                <label for="dooval">Ovality scanning increments:</label>
+                <input id="dooval" type="number" value="0" min="0" max="20" data-bind="value: dooval"> 
             </div>
 
             <div>
@@ -58,10 +54,15 @@
                 <input id="stl" type="checkbox" unchecked data-bind="checked: stl">
                 </label>
             </div>
-            <div style="padding-left: 10px;">
+            <br>
+    </div>
+    <hr>
+    <br>
+    <div id="scanning_controls" class="row" style="margin-bottom: 10px;margin-left: 10px;">
+        <div class="col-xs-6" style="text-align: left;">
             <button id="start_scan_button" class="btn btn-primary" data-bind="click: start_scan">Start Scan</button>
-            </div>
+            <button id="stop_scan_button" class="btn btn-primary" data-bind="click: stop_scan">Stop Scan</button>
         </div>
-
+    </div>
 </div>
-   
+    
