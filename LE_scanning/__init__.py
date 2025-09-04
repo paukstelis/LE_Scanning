@@ -17,9 +17,6 @@ from octoprint.filemanager import FileManager
 from octoprint.filemanager.storage import LocalFileStorage
 import re
 import time
-#import os
-#import math
-import asyncio
 import logging
 from . import STLGenerator as STLGenerator
 
@@ -27,6 +24,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
     octoprint.plugin.AssetPlugin,
     octoprint.plugin.StartupPlugin,
     octoprint.plugin.SimpleApiPlugin,
+    octoprint.plugin.EventHandlerPlugin,
     octoprint.plugin.TemplatePlugin
 ):
 
@@ -53,20 +51,34 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.stop_flag = False
         self.dooval = 0
 
+        self.current_x = None
+        self.current_z = None
+        self.current_a = None
+        self.current_b = None
+
         self.commands = []
 
     def initialize(self):
         self.datafolder = self.get_plugin_data_folder()
+        self._event_bus.subscribe("LATHEENGRAVER_SEND_POSITION", self.get_position)
         path = self._settings.getBaseFolder("uploads")
         self._logger.info(f"Path is {path}")
-        self.loop = asyncio.get_event_loop()
 
     def get_settings_defaults(self):
         return {
             # put your plugin's default settings here
         }
 
-    ##~~ AssetPlugin mixin
+    def on_event(self, event, payload):
+        if event == "plugin_latheengraver_send_position":
+            self.get_position(event, payload)
+
+    def get_position(self, event, payload):
+        #self._logger.info(payload)
+        self.current_x = payload["x"]
+        self.current_z = payload["z"]
+        self.current_a = payload["a"]
+        self.current_b = payload["b"]
 
     def get_assets(self):
         # Define your plugin's asset files to automatically include in the
@@ -167,10 +179,6 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         if self.dooval:
             probe_commands.append("NEXTSEGMENT")
             arot = 360 / self.dooval
-            #Move back to first probe position
-            #this still doesn't handle front/back side scans for Z
-            probe_commands.append(f"G90 G0 {scan_dir}5")
-            probe_commands.append(f"G90 G0 {self.scan_type}0")
             #Rotate A
             probe_commands.append(f"G91 G21 G0 A{arot}")
             probe_commands = probe_commands * self.dooval
@@ -194,6 +202,24 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
                     break
                 if "NEXTSEGMENT" in self.commands[0]:
                     self.probe_data.append("NEXTSEGMENT")
+
+                    time.sleep(0.5)
+                    #Reset position HERE
+                    #Move back to first probe position, need to be careful here!
+                    #this still doesn't handle front/back side scans for Z
+                    reset_commands = []
+                    if self.scan_type == "Z":
+                        if self.current_x < 0:
+                            #less than 0 point, so retract back
+                            reset_commands.append(f"G90 G0 X0")
+                            reset_commands.append(f"G90 G0 Z0")
+                        else:
+                            reset_commands.append(f"G90 G0 Z0")
+                    if self.scan_type == "X":
+                        reset_commands.append(f"G90 G0 Z0")
+                        reset_commands.append(f"G90 G0 X0")
+                    self.commands[1:1] = reset_commands
+
                 self._printer.commands(self.commands[0])
                 try:
                     self.commands.pop(0)
@@ -247,10 +273,8 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
                 return
             
             self.probing = True
-            if self.continuous:
-                self.start_continuous_scan()
-            else:
-                self.start_scan()
+
+            self.start_scan()
 
         if command == "stop_scan":
             if self.probing:
