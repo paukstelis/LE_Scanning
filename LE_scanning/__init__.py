@@ -138,7 +138,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         #handle direction here
         dir = ""
         retract_dir = ""
-
+        move_dir = "" #the movement direction between probes, should be nothing for X positive,
         self.commands = []
         #Make sure in G94 mode
         self.commands.append("G94")
