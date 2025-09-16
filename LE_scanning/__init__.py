@@ -63,6 +63,11 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self._event_bus.subscribe("LATHEENGRAVER_SEND_POSITION", self.get_position)
         path = self._settings.getBaseFolder("uploads")
         self._logger.info(f"Path is {path}")
+        storage = self._file_manager._storage("local")
+        if storage.folder_exists("scans"):
+            self._logger.info("Scans exists")
+        else:
+            storage.add_folder("scans")
 
     def get_settings_defaults(self):
         return {
