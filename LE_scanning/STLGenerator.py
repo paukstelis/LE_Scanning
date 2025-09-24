@@ -22,7 +22,7 @@ class STLGenerator:
 
     def _zero_coordinates(self):
         """Zero the X and Z coordinates based on the first coordinate."""
-        x0, z0 = self.coords[0]
+        x0, z0, a0 = self.coords[0]
         self.coords[:, 0] -= x0  # Adjust X values
         self.coords[:, 1] -= z0  # Adjust Z values to zero
 
