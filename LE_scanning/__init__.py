@@ -63,6 +63,11 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self._event_bus.subscribe("LATHEENGRAVER_SEND_POSITION", self.get_position)
         path = self._settings.getBaseFolder("uploads")
         self._logger.info(f"Path is {path}")
+        storage = self._file_manager._storage("local")
+        if storage.folder_exists("scans"):
+            self._logger.info("Scans exists")
+        else:
+            storage.add_folder("scans")
 
     def get_settings_defaults(self):
         return {
@@ -125,7 +130,16 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         if self.stl:
             path = self._settings.getBaseFolder("uploads")
             tosavepath =  f"{path}/scans/{self.stlfile}"
-            stlgen = STLGenerator.STLGenerator(self.probe_data, self.ref_diam)
+            # Only use points up to the first NEXTSEGMENT
+            if "NEXTSEGMENT" in self.probe_data:
+                first_segment = []
+                for point in self.probe_data:
+                    if point == "NEXTSEGMENT":
+                        break
+                    first_segment.append(point)
+            else:
+                first_segment = self.probe_data
+            stlgen = STLGenerator.STLGenerator(first_segment, self.ref_diam)
             stlgen.generate_mesh()
             stlgen.save_stl(tosavepath)
         

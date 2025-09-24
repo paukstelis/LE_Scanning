@@ -47,17 +47,21 @@ $(function() {
         self.start_scan = function() {
             //Need to do some sanity checks here:
             var error = false;
-            if (self.scan_increment > self.scan_length) {
+            if (self.scan_increment() > self.scan_length()) {
                 error = "Scan increment greater than length!";
             }
-            if (self.slt && (self.ref_diam < 5 )) {
+            if (self.stl() && (self.ref_diam() < 5 )) {
                 error = "Reference diameter must be greater than 5mm";
             }
 
-            if (self.pull_off < 0) {
+            if (self.pull_off() < 0) {
                 error = "Pull-off value must be greater than 0";
             }
-            
+
+            if (self.dooval() > 1 && self.dooval() < 4) {
+                error = "Ovality must be at least 4";
+            }
+
             var data = {
                 ref_diam: self.ref_diam(),
                 scan_type: self.scan_type(),
@@ -71,7 +75,7 @@ $(function() {
                 dooval: self.dooval(),
             };
             
-            if (self.dooval()) {
+            if (self.dooval() && error === false) {
                 alert("Ovality scans require a known A-axis zero point. Mark the first scan point on your work piece!")
             }
 
