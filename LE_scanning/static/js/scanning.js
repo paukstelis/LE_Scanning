@@ -50,7 +50,7 @@ $(function() {
             if (self.scan_increment() > self.scan_length()) {
                 error = "Scan increment greater than length!";
             }
-            if (self.slt() && (self.ref_diam() < 5 )) {
+            if (self.stl() && (self.ref_diam() < 5 )) {
                 error = "Reference diameter must be greater than 5mm";
             }
 

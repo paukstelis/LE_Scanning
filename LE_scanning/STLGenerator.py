@@ -36,10 +36,10 @@ class STLGenerator:
         vertices = []
         faces = []
 
-        for i, (x, radius) in enumerate(self.coords):
+        for i, (x, radius, a) in enumerate(self.coords):
             angle_step = 2 * np.pi / self.num_segments
             circle_points = [
-                (x, radius * math.cos(angle), radius * math.sin(angle))
+                (radius * math.cos(angle), radius * math.sin(angle), x)
                 for angle in np.arange(0, 2 * np.pi, angle_step)
             ]
             vertices.extend(circle_points)
