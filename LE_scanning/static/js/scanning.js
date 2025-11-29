@@ -61,8 +61,8 @@ $(function() {
             }
 
             if (Number(self.dooval()) > 1 && Number(self.dooval()) < 4) {
-                error = "Ovality must be at least 4";
-            }
+               error = "Ovality must be at least 4";
+            }          
 
             var data = {
                 ref_diam: self.ref_diam(),
