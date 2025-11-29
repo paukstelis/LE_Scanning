@@ -47,20 +47,22 @@ $(function() {
         self.start_scan = function() {
             //Need to do some sanity checks here:
             var error = false;
-            if (self.scan_increment() > self.scan_length()) {
+            if (Number(self.scan_increment()) > Number(self.scan_length())) {
                 error = "Scan increment greater than length!";
+                console.log(self.scan_increment());
+                console.log(self.scan_length());
             }
             if (self.stl() && (self.ref_diam() < 5 )) {
                 error = "Reference diameter must be greater than 5mm";
             }
 
-            if (self.pull_off() < 0) {
+            if (Number(self.pull_off()) < 0) {
                 error = "Pull-off value must be greater than 0";
             }
 
-            if (self.dooval() > 1 && self.dooval() < 4) {
-                error = "Ovality must be at least 4";
-            }
+            if (Number(self.dooval()) > 1 && Number(self.dooval()) < 4) {
+               error = "Ovality must be at least 4";
+            }          
 
             var data = {
                 ref_diam: self.ref_diam(),
