@@ -183,11 +183,13 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
                 
         i = 0
         probes = round(self.length/self.increment)
+        move_increment = self.length/probes
         probe_commands = []
         while i <= probes:
-            probe_commands.extend([f"G91 G21 G38.3 {scan_dir}{dir}100 F150",
-                            f"G91 G21 G0 {scan_dir}{retract_dir}{self.pull_off} F500",
-                            f"G91 G21 G0 {self.scan_type}{move_dir}{self.increment} F500"])                                 
+            probe_commands.extend([f"G91 G21 G38.3 {scan_dir}{dir}100 F150",f"G91 G21 G0 {scan_dir}{retract_dir}{self.pull_off} F500"])
+            #don't want to advanced again if we have made last probe
+            if i != probes:
+                probe_commands.extend([f"G91 G21 G0 {self.scan_type}{move_dir}{move_increment:0.3f} F500"])                                 
             i+=1
         if self.dooval:
             probe_commands.append("NEXTSEGMENT")
