@@ -1,68 +1,72 @@
 <!-- scanning_tab.jinja2 -->
 
-<div id="scanning_main" class="row-fluid">
+<div id="scanning_main" class="container-fluid">
     <div id="plotarea" style="width: 100%; height: 500px; display:none;">
     </div>
-    <div id="scanning_sub" style="width: 100%; height: 500px;">  
+    <div id="scanning_sub" class="row">
+        <div class="col-md-12">
             <div>
-                <label for="scan_type">Scan Type:
-                <br>
-                <select id="scan_type" name="scan_type" data-bind="value: scan_type">
+                <label for="scan_type">Scan Type:</label>
+                <select id="scan_type" name="scan_type" data-bind="value: scan_type" class="form-control">
                     <option value="X">X-Scan</option>
                     <option value="Z">Z-Scan</option>
                 </select>
-                </label>
             </div>
             <div>
                 <label for="direction">Direction:</label>
-                <select class="span4" id="direction" name="direction" data-bind="value: scan_direction">
+                <select id="direction" name="direction" data-bind="value: scan_direction" class="form-control">
                     <option value="0">Positive</option>
                     <option value="1">Negative</option>
                 </select>   
             </div>
             <div>
-                <label for="reference">Reference diameter (mm):</label>
-                <input id="reference" type="number" value="1" min="5" step="any" data-bind="value: ref_diam">
+                <label title="The diameter at the first probe point. This is only used for creating STL files"
+                       for="reference">Reference diameter (mm):</label>
+                <input id="reference" type="number" min="5" step="any" data-bind="value: ref_diam" class="form-control">
             </div>
             <div>
-                <label for="length">Scan length (mm):</label>
-                <input id="length" type="number" value="60" min="10" step="any" data-bind="value: scan_length">
+                <label title="The overall distance to be scanned, starting from the first probing point"
+                       for="length">Scan length (mm):</label>
+                <input id="length" type="number" min="10" step="any" data-bind="value: scan_length" class="form-control">
             </div>
-
             <div>
-                <label for="increment">Scan increments (mm):</label>
-                <input id="increment" type="number" value="1" min="0.5" step="any" data-bind="value: scan_increment">
+                <label title="How far to move the fixed axis between probing"
+                       for="increment">Scan increments (mm):</label>
+                <input id="increment" type="number" min="0.5" step="any" data-bind="value: scan_increment" class="form-control">
             </div>
-            
             <div>
-                <label for="pull_off">Pull-off distance (mm):</label>
-                <input id="pull_off" type="number" value="3" min="0.2" step="any" data-bind="value: pull_off">
+                <label title="How far to retract after successful probe. Relative to the last probing event."
+                       for="pull_off">Pull-off distance (mm):</label>
+                <input id="pull_off" type="number" min="0.2" step="any" data-bind="value: pull_off" class="form-control">
             </div>
-
             <div>
-                <label for="pull_off">Scan Name (blank for date/time):</label>
-                <input id="pull_off" type="text" value="0" data-bind="value: name">
+                <label for="name">Scan Name (blank for date/time):</label>
+                <input id="name" type="text" data-bind="value: name" class="form-control">
             </div>
-
             <div>
-                <label for="dooval">Ovality scanning increments:</label>
-                <input id="dooval" type="number" value="0" min="0" max="20" data-bind="value: dooval"> 
+                <label title="How many angular offsets to scan. Minimum of 4."
+                       for="dooval">Ovality scanning increments:</label>
+                <input id="dooval" type="number" min="0" max="20" data-bind="value: dooval" class="form-control"> 
             </div>
-
+            <div id="angles">
+                <label title="Comma delimited list of A angles that will always be probed if ovality scanning is active"
+                       for="angles">Angle enforcement:</label>
+                <input id="angles" type="text" data-bind="value: forced_angles" class="form-control"> 
+            </div>
             <div>
-                <label for="stl">Create STL:
-                <input id="stl" type="checkbox" unchecked data-bind="checked: stl">
-                </label>
+                <label for="stl">Create STL:</label>
+                <input id="stl" type="checkbox" data-bind="checked: stl">
             </div>
-            <br>
+        </div>
     </div>
     <hr>
-    <br>
-    <div id="scanning_controls" class="row" style="margin-bottom: 10px;margin-left: 10px;">
+    <div class="row" style="margin-bottom: 10px;">
         <div class="col-xs-6" style="text-align: left;">
             <button id="start_scan_button" class="btn btn-primary" data-bind="click: start_scan">Start Scan</button>
+        </div>
+        <br>
+        <div class="col-xs-6">
             <button id="stop_scan_button" class="btn btn-primary" data-bind="click: stop_scan">Stop Scan</button>
         </div>
     </div>
 </div>
-    

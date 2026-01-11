@@ -50,6 +50,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self._identifier = "scanning"
         self.stop_flag = False
         self.dooval = 0
+        self.forced_probes = []
 
         self.current_x = None
         self.current_z = None
@@ -94,11 +95,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             "less": ["less/scanning.less"]
         }
 
-    def get_api_commands(self):
-        return dict(
-            write_gcode=[],
-            editmeta=[]
-        )
+   
     def generate_scan(self):
         #set all data to begin scan
         if not self.name:    
@@ -184,22 +181,37 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         i = 0
         probes = round(self.length/self.increment)
         move_increment = self.length/probes
-        probe_commands = []
+        probe_commands = []  #main list
+        single_probe_commands = []  #Each X/Z scan
+
         while i <= probes:
-            probe_commands.extend([f"G91 G21 G38.3 {scan_dir}{dir}100 F150",f"G91 G21 G0 {scan_dir}{retract_dir}{self.pull_off} F500"])
+            single_probe_commands.extend([f"G91 G21 G38.3 {scan_dir}{dir}100 F150",f"G91 G21 G0 {scan_dir}{retract_dir}{self.pull_off} F500"])
             #don't want to advanced again if we have made last probe
             if i != probes:
-                probe_commands.extend([f"G91 G21 G0 {self.scan_type}{move_dir}{move_increment:0.3f} F500"])                                 
+                single_probe_commands.extend([f"G91 G21 G0 {self.scan_type}{move_dir}{move_increment:0.3f} F500"])                                 
             i+=1
+
         if self.dooval:
-            probe_commands.append("NEXTSEGMENT")
             arot = 360 / self.dooval
+            # Collect all segment angles
+            probe_angles = [i * arot for i in range(int(self.dooval))]
+            # Add forced probe angles
+            probe_angles.extend(self.forced_probes)
+            # Sort and deduplicate
+            probe_angles = sorted(set(probe_angles))
+            self._logger.info(f"Probe angles: {probe_angles}")
             #Rotate A
-            probe_commands.append(f"G91 G21 G0 A{arot}")
-            probe_commands = probe_commands * self.dooval
+            for idx, angle in enumerate(probe_angles):
+                probe_commands.append(f"G90 G0 A{angle:.2f}")  # Move to absolute angle
+                probe_commands.extend(single_probe_commands)   # Probe at this angle
+                probe_commands.append("NEXTSEGMENT")
+             
+        else:
+            probe_commands = single_probe_commands
 
         self.commands.extend(probe_commands)                            
         self.commands.append("SCANDONE")
+        self.commands.append("G0 A0")
         self._logger.info(self.commands)
         self.send_next_probe()
         #prompt to begin running commands somehow?
@@ -263,6 +275,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         
         if command == "start_scan":
             #self._logger.info(data)
+            self.forced_probes = []
             self.probe_data = []
             self.scan_type = str(data["scan_type"])
             self.ref_diam = float(data["ref_diam"])
@@ -274,6 +287,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             self.stl = bool(data["stl"])
             self.name = str(data["name"])
             self.dooval = int(data["dooval"])
+            self.forced_probes = [float(val) for val in data.get("forced_probes", [])]
             if self.name == "None":
                 self.name = None
 
@@ -338,7 +352,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             self.probe_data.append((0,0,0))
         else:
             self.probe_data.append((x-self.reference[0],z-self.reference[1],a-self.reference[2]))
-            self._logger.info(self.probe_data)
+            self._logger.debug(self.probe_data)
         self.update_probe_data()
         self.send_next_probe()
 

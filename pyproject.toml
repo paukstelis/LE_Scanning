@@ -1,0 +1,45 @@
+[build-system]
+requires = [
+    "setuptools>=68",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "LE_Scanning"
+version = "0.1.9"
+description = "Probe scanning for LatheEngraver"
+authors = [
+    { name = "Paul Paukstelis", email = "transpirationturning@gmail.com" },
+]
+requires-python = ">=3.7,<4"
+dependencies = [
+    "numpy",
+    "numpy-stl",
+]
+dynamic = [
+    "license",
+]
+
+[project.entry-points."octoprint.plugin"]
+scanning = "LE_scanning"
+
+[project.urls]
+Homepage = "https://github.com/paukstelis/LE_Scanning"
+
+[project.optional-dependencies]
+develop = [
+    "go-task-bin",
+]
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = [
+    "LE_scanning",
+    "LE_scanning.*",
+]
