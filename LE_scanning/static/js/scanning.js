@@ -18,6 +18,7 @@ $(function() {
         self.name = ko.observable(null);
         self.dooval = ko.observable(0);
         self.scanning = ko.observable(false);
+        self.forced_angles = ko.observable(null);
         self.xValues = [];
         self.zValues = [];
         self.aValues = [];
@@ -41,7 +42,27 @@ $(function() {
                         "#808000", // olive
                         "#ffd8b1", // apricot
                         "#000080", // navy
-                        "#808080"  // gray
+                        "#808080",  // gray
+                        "#b6d7a8", // light green
+                        "#6fa8dc", // sky blue
+                        "#c27ba0", // mauve
+                        "#f9cb9c", // light orange
+                        "#a2c4c9", // pale teal
+                        "#e06666", // salmon
+                        "#93c47d", // moss green
+                        "#8e7cc3", // violet
+                        "#ffd966", // light yellow
+                        "#b4a7d6", // periwinkle
+                        "#76a5af", // steel blue
+                        "#c9daf8", // pale blue
+                        "#f6b26b", // tan
+                        "#674ea7", // deep purple
+                        "#b7b7b7", // silver
+                        "#cc4125", // brick red
+                        "#38761d", // forest green
+                        "#134f5c", // dark teal
+                        "#990000", // dark red
+                        "#e69138"  // pumpkin
                         ];
 
         self.start_scan = function() {
@@ -62,7 +83,15 @@ $(function() {
 
             if (Number(self.dooval()) > 1 && Number(self.dooval()) < 4) {
                error = "Ovality must be at least 4";
-            }          
+            }
+            
+            let forcedAnglesArray = [];
+            if (self.forced_angles() && typeof self.forced_angles() === "string") {
+                forcedAnglesArray = self.forced_angles()
+                    .split(',')
+                    .map(s => parseFloat(s.trim()))
+                    .filter(n => !isNaN(n));
+            }
 
             var data = {
                 ref_diam: self.ref_diam(),
@@ -75,6 +104,7 @@ $(function() {
                 stl: self.stl(),
                 name: self.name(),
                 dooval: self.dooval(),
+                forced_probes: forcedAnglesArray
             };
             
             if (self.dooval() && error === false) {
