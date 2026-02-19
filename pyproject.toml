@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "LE_Scanning"
-version = "0.1.9"
+version = "0.1.10"
 description = "Probe scanning for LatheEngraver"
 authors = [
     { name = "Paul Paukstelis", email = "transpirationturning@gmail.com" },
