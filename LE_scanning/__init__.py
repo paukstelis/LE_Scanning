@@ -141,6 +141,8 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             stlgen.save_stl(tosavepath)
         
         self.probe_data = []
+        data = dict(type="scandone")
+        self._plugin_manager.send_plugin_message('scanning',data)
 
     def start_scan(self):
         self.probing = True

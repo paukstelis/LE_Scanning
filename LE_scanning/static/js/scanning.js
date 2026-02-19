@@ -7,6 +7,8 @@
 $(function() {
     function ScanningViewModel(parameters) {
         var self = this;
+        self.settings = parameters[0];
+        self.files = parameters[1];
         self.ref_diam = ko.observable(0);
         self.scan_type = ko.observable(0);
         self.pull_off = ko.observable(0);
@@ -108,7 +110,7 @@ $(function() {
             };
             
             if (self.dooval() && error === false) {
-                alert("Ovality scans require a known A-axis zero point. Mark the first scan point on your work piece!")
+                alert("Ovality scans require a known A-axis zero point. Mark the first scan point on your work piece!");
             }
 
             if (error === false) {
@@ -212,11 +214,14 @@ $(function() {
             if (plugin == 'scanning' && data.type == 'graph') {
                 self.createPlot(data.probe);
             }
+            if (plugin == 'scanning' && data.type == 'scandone') {
+                self.files.requestData({ force: true });
+            }
         }
     }
     OCTOPRINT_VIEWMODELS.push({
         construct: ScanningViewModel,
-        dependencies: [ /* "loginStateViewModel", "settingsViewModel" */ ],
+        dependencies: [ "settingsViewModel","filesViewModel" ],
         elements: [ "#tab_plugin_scanning" ]
     });
 });
