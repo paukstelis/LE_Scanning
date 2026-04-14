@@ -58,6 +58,9 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.current_b = None
 
         self.commands = []
+        #for handling returns during ovality
+        self.safe_reset = False
+        self.largest_probe = None
 
     def initialize(self):
         self.datafolder = self.get_plugin_data_folder()
@@ -231,13 +234,16 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
                     self.commands.pop(0)
                     break
                 if "NEXTSEGMENT" in self.commands[0]:
-                    self.probe_data.append("NEXTSEGMENT")
-
-                    time.sleep(0.5)
-                    #Reset position HERE
-                    #Move back to first probe position, need to be careful here!
-                    #this still doesn't handle front/back side scans for Z
+                    #Check current position with respect to starting poit of probing
                     reset_commands = []
+                    if self.scan_type == "X":
+                        if self.current_z > 0:
+                            reset_commands.append(f"G90 G0 X0")
+                            reset_commands.append(f"G90 G0 Z0")
+                        else:
+                            reset_commands.append(f"G90 G0 Z0")
+                            reset_commands.append(f"G90 G0 X0")
+
                     if self.scan_type == "Z":
                         if self.current_x < 0:
                             #less than 0 point, so retract back
@@ -245,9 +251,8 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
                             reset_commands.append(f"G90 G0 Z0")
                         else:
                             reset_commands.append(f"G90 G0 Z0")
-                    if self.scan_type == "X":
-                        reset_commands.append(f"G90 G0 Z0")
-                        reset_commands.append(f"G90 G0 X0")
+                    self.probe_data.append("NEXTSEGMENT")
+                    time.sleep(0.5)
                     self.commands[1:1] = reset_commands
 
                 self._printer.commands(self.commands[0])
