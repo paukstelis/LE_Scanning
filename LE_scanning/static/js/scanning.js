@@ -17,6 +17,7 @@ $(function() {
         self.scan_increment = ko.observable(0);
         self.continuous = ko.observable(false);
         self.stl = ko.observable(false);
+        self.svg = ko.observable(false);
         self.name = ko.observable(null);
         self.dooval = ko.observable(0);
         self.scanning = ko.observable(false);
@@ -104,6 +105,7 @@ $(function() {
                 scan_increment: self.scan_increment(),
                 continuous: self.continuous(),
                 stl: self.stl(),
+                svg: self.svg(),
                 name: self.name(),
                 dooval: self.dooval(),
                 forced_probes: forcedAnglesArray

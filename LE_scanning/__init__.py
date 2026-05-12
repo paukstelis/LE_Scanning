@@ -40,11 +40,13 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
         self.length = 0
         self.continuous = False
         self.stl = False
+        self.svg = False
         self.name = None
         self.probe_data = []
         self.reference = None
         self.scanfile = None
         self.stlfile = None
+        self.svgfile = None
         self.output_path = None
         self.loop = None
         self._identifier = "scanning"
@@ -101,12 +103,17 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
    
     def generate_scan(self):
         #set all data to begin scan
-        if not self.name:    
-            self.scanfile = self.scan_type + "_" + time.strftime("%Y%m%d-%H%M") + "_scan.txt"
-            self.stlfile = self.scan_type + "_" + time.strftime("%Y%m%d-%H%M") + "_scan.stl"
+        if not self.name:
+            bn = self.scan_type + "_" + time.strftime("%Y%m%d-%H%M") + "_scan"   
+            self.scanfile = bn + ".txt"
+            self.stlfile = bn + ".stl"
+            self.svgfile = bn + ".svg"
         else:
-            self.scanfile = self.scan_type + "_" + self.name + "_scan.txt"
-            self.stlfile = self.scan_type + "_" + self.name + "_scan.stl"
+            bn = self.scan_type + "_" + self.name + "_scan"
+            self.scanfile = bn + ".txt"
+            self.stlfile = bn + ".stl"
+            self.svgfile = bn + ".svg"
+
         self.probe_data = []
         self.reference = None
         storage = self._file_manager._storage("local")
@@ -143,6 +150,54 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             stlgen.generate_mesh()
             stlgen.save_stl(tosavepath)
         
+        if self.svg:
+            path = self._settings.getBaseFolder("uploads")
+            svgsavepath = f"{path}/scans/{self.svgfile}"
+
+            segments = []
+            current_segment = []
+            for p in self.probe_data:
+                if p == "NEXTSEGMENT":
+                    if current_segment:
+                        segments.append(current_segment)
+                        current_segment = []
+                else:
+                    current_segment.append(p)
+            if current_segment:
+                segments.append(current_segment)
+
+            # If multiple segments (ovality), average the x,z points across segments
+            if len(segments) > 1:
+                min_len = min(len(s) for s in segments)
+                averaged = []
+                for i in range(min_len):
+                    avg_x = sum(s[i][0] for s in segments) / len(segments)
+                    avg_z = sum(s[i][1] for s in segments) / len(segments)
+                    averaged.append((avg_x, avg_z))
+                svg_paths = [averaged]
+            else:
+                svg_paths = [[(p[0], p[1]) for p in segments[0]]] if segments else []
+
+            if svg_paths:
+                if self.direction:
+                    svg_paths = [list(reversed(path)) for path in svg_paths]
+                all_points = [p for path in svg_paths for p in path]
+                xs = [p[0] for p in all_points]
+                zs = [p[1] for p in all_points]
+                min_x, max_x = min(xs), max(xs)
+                min_z, max_z = min(zs), max(zs)
+                width = max_x - min_x
+                height = max_z - min_z
+
+                with open(svgsavepath, "w") as svgfile:
+                    svgfile.write(f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}mm" height="{height}mm" viewBox="{min_x} {min_z} {width} {height}">\n')
+                    d = "M " + " L ".join(f"{x},{z}" for x, z in svg_paths[0])
+                    svgfile.write(f'  <path d="{d}" stroke="blue" stroke-width="0.1" fill="none"/>\n')
+                    svgfile.write('</svg>\n')
+
+                self._logger.info(f"SVG saved to {svgsavepath}")
+
+
         self.probe_data = []
         data = dict(type="scandone")
         self._plugin_manager.send_plugin_message('scanning',data)
@@ -292,6 +347,7 @@ class ScanningPlugin(octoprint.plugin.SettingsPlugin,
             self.length = float(data["scan_length"])
             self.increment = float(data["scan_increment"])
             self.stl = bool(data["stl"])
+            self.svg = bool(data["svg"])
             self.name = str(data["name"])
             self.dooval = int(data["dooval"])
             self.forced_probes = [float(val) for val in data.get("forced_probes", [])]
